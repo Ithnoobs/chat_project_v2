@@ -11,6 +11,7 @@ urlpatterns = [
     path('room/<slug:slug>/leave/', views.leave_room, name='leave_room'),
     path('room/<slug:slug>/delete/', views.delete_room, name='delete_room'),
     path('room/<slug:slug>/invite/', views.invite_user, name='invite_user'),
+    path('room/<slug:slug>/report-user/<int:user_id>/', views.report_user, name='report_user'),
     
     # API endpoints
     path('api/room/<slug:slug>/messages/', views.api_get_messages, name='api_messages'),

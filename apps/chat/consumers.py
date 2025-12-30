@@ -14,6 +14,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
         
+        # Check if user is banned
+        is_banned = await self.check_if_banned()
+        if is_banned:
+            await self.close()
+            return
+        
         # Check if user is muted
         is_muted = await self.check_if_muted()
         self.is_muted = is_muted
@@ -24,14 +30,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         
+        # Join user-specific group for targeted messages (kick/ban)
+        self.user_group_name = f'user_{self.user.id}'
+        await self.channel_layer.group_add(
+            self.user_group_name,
+            self.channel_name
+        )
+        
         await self.accept()
+        
+        # Send mute status on connect
+        if is_muted:
+            mute_info = await self.get_mute_info()
+            await self.send(text_data=json.dumps({
+                'type': 'mute_status',
+                'is_muted': True,
+                'expires_at': mute_info
+            }))
     
     async def disconnect(self, close_code):
-        # Leave room group
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
+        if hasattr(self, 'user_group_name'):
+            await self.channel_layer.group_discard(
+                self.user_group_name,
+                self.channel_name
+            )
     
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -40,13 +66,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if message_type == 'message':
             message = data.get('message', '')
             username = data.get('username', '')
+            image_url = data.get('image_url', None)
             
-            # Check if user is muted
+            # Refresh mute status
             is_muted = await self.check_if_muted()
             if is_muted:
                 await self.send(text_data=json.dumps({
                     'type': 'error',
                     'message': 'You are muted in this room'
+                }))
+                return
+            
+            # Check if banned
+            is_banned = await self.check_if_banned()
+            if is_banned:
+                await self.send(text_data=json.dumps({
+                    'type': 'force_disconnect',
+                    'reason': 'You are banned from this room'
                 }))
                 return
             
@@ -60,6 +96,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'type': 'chat_message',
                     'message': message,
                     'username': username,
+                    'image_url': image_url,
                     'message_id': saved_message.id if saved_message else None,
                     'timestamp': timezone.now().isoformat()
                 }
@@ -79,11 +116,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
     
     async def chat_message(self, event):
-        # Send message to WebSocket
         await self.send(text_data=json.dumps({
             'type': 'message',
             'message': event['message'],
             'username': event['username'],
+            'image_url': event.get('image_url'),
             'message_id': event.get('message_id'),
             'timestamp': event.get('timestamp')
         }))
@@ -99,6 +136,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'message_deleted',
             'message_id': event['message_id']
+        }))
+    
+    async def force_disconnect(self, event):
+        """Handle kick/ban - force user to disconnect"""
+        await self.send(text_data=json.dumps({
+            'type': 'force_disconnect',
+            'reason': event.get('reason', 'You have been removed from this room')
+        }))
+        await self.close()
+    
+    async def mute_status(self, event):
+        """Update mute status for user"""
+        await self.send(text_data=json.dumps({
+            'type': 'mute_status',
+            'is_muted': event.get('is_muted', False),
+            'expires_at': event.get('expires_at')
         }))
     
     @database_sync_to_async
@@ -135,6 +188,56 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return True
         except Room.DoesNotExist:
             return False
+    
+    @database_sync_to_async
+    def get_mute_info(self):
+        from apps.moderation.models import RoomMute
+        from apps.chat.models import Room
+        
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            mute = RoomMute.objects.filter(user=self.user, room=room).first()
+            if mute and mute.expires_at:
+                return mute.expires_at.isoformat()
+            return None
+        except:
+            return None
+    
+    @database_sync_to_async
+    def check_if_banned(self):
+        from apps.moderation.models import ModerationAction
+        from apps.chat.models import Room
+        from apps.authentication.models import UserProfile
+        
+        # Check global ban
+        try:
+            profile = UserProfile.objects.get(user=self.user)
+            if profile.is_currently_banned:
+                return True
+        except UserProfile.DoesNotExist:
+            pass
+        
+        # Check room ban
+        try:
+            room = Room.objects.get(slug=self.room_slug)
+            ban = ModerationAction.objects.filter(
+                target_user=self.user,
+                room=room,
+                action_type='ban',
+                is_active=True
+            ).first()
+            
+            if not ban:
+                return False
+            
+            if ban.expires_at and timezone.now() > ban.expires_at:
+                ban.is_active = False
+                ban.save()
+                return False
+            
+            return True
+        except Room.DoesNotExist:
+            return False
 
 
 class PresenceConsumer(AsyncWebsocketConsumer):
@@ -147,16 +250,13 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         
         self.presence_group = 'presence'
         
-        # Join presence group
         await self.channel_layer.group_add(
             self.presence_group,
             self.channel_name
         )
         
-        # Update user status to online
         await self.update_status('online')
         
-        # Broadcast status to all users
         await self.channel_layer.group_send(
             self.presence_group,
             {
@@ -171,10 +271,8 @@ class PresenceConsumer(AsyncWebsocketConsumer):
     
     async def disconnect(self, close_code):
         if hasattr(self, 'user') and self.user.is_authenticated:
-            # Update user status to offline
             await self.update_status('offline')
             
-            # Broadcast status to all users
             await self.channel_layer.group_send(
                 self.presence_group,
                 {
@@ -185,7 +283,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
                 }
             )
             
-            # Leave presence group
             await self.channel_layer.group_discard(
                 self.presence_group,
                 self.channel_name
@@ -196,7 +293,6 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         message_type = data.get('type')
         
         if message_type == 'heartbeat':
-            # Keep connection alive and update last seen
             await self.update_last_seen()
         
         elif message_type == 'status_change':
@@ -254,7 +350,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         
         self.notification_group = f'notifications_{self.user.id}'
         
-        # Join user's notification group
         await self.channel_layer.group_add(
             self.notification_group,
             self.channel_name
@@ -262,7 +357,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         
         await self.accept()
         
-        # Send unread count on connect
         unread_count = await self.get_unread_count()
         await self.send(text_data=json.dumps({
             'type': 'unread_count',

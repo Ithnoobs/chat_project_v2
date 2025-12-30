@@ -6,6 +6,8 @@ from django.http import JsonResponse, HttpResponseForbidden
 from django.utils import timezone
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from .models import Report, ModerationAction, RoomMute, Warning
 from .forms import (
@@ -14,15 +16,14 @@ from .forms import (
 )
 from apps.chat.models import Room, RoomMembership, Message
 from apps.authentication.models import UserProfile
+from apps.notifications.models import Notification
 
 
 def is_staff_or_admin(user):
-    """Check if user is staff or admin"""
     return user.is_staff or user.is_superuser
 
 
 def can_moderate_room(user, room):
-    """Check if user can moderate a specific room"""
     if user.is_staff or user.is_superuser:
         return True
     # Room creator can moderate
@@ -39,7 +40,6 @@ def can_moderate_room(user, room):
 
 @login_required
 def report_message(request, message_id):
-    """Allow users to report a message"""
     message = get_object_or_404(Message, id=message_id)
     
     # Can't report own messages
@@ -64,6 +64,8 @@ def report_message(request, message_id):
             report = form.save(commit=False)
             report.reported_by = request.user
             report.message = message
+            report.reported_user = message.sender
+            report.room = message.room
             report.save()
             messages.success(request, "Message reported. A moderator will review it.")
             return redirect('chat:room_detail', slug=message.room.slug)
@@ -82,7 +84,6 @@ def report_message(request, message_id):
 
 @login_required
 def moderation_dashboard(request):
-    """Main moderation dashboard"""
     user = request.user
     
     # Get rooms user can moderate
@@ -104,7 +105,7 @@ def moderation_dashboard(request):
         # Only show reports for rooms user can moderate
         pending_reports = Report.objects.filter(
             status='pending',
-            message__room__in=moderable_rooms
+            room__in=moderable_rooms
         )
         is_global_admin = False
     
@@ -130,7 +131,6 @@ def moderation_dashboard(request):
 
 @login_required
 def reports_list(request):
-    """List all reports (filtered by moderator's scope)"""
     user = request.user
     status_filter = request.GET.get('status', 'all')
     
@@ -138,7 +138,7 @@ def reports_list(request):
         reports = Report.objects.all()
     else:
         moderable_rooms = get_moderable_rooms(user)
-        reports = Report.objects.filter(message__room__in=moderable_rooms)
+        reports = Report.objects.filter(room__in=moderable_rooms)
     
     if status_filter != 'all':
         reports = reports.filter(status=status_filter)
@@ -155,13 +155,12 @@ def reports_list(request):
 
 @login_required
 def review_report(request, report_id):
-    """Review and act on a report"""
     report = get_object_or_404(Report, id=report_id)
     user = request.user
     
     # Check permissions
     if not user.is_staff and not user.is_superuser:
-        if not can_moderate_room(user, report.message.room):
+        if report.room and not can_moderate_room(user, report.room):
             return HttpResponseForbidden("You don't have permission to review this report.")
     
     if request.method == 'POST':
@@ -188,7 +187,6 @@ def review_report(request, report_id):
 
 @login_required
 def ban_user(request, user_id, room_id=None):
-    """Ban a user (globally if admin, or from specific room)"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id) if room_id else None
     
@@ -228,7 +226,6 @@ def ban_user(request, user_id, room_id=None):
                 profile.ban_reason = reason
                 profile.banned_until = expires_at
                 profile.save()
-                
                 action_room = None
             else:
                 # Room-specific ban - remove from room
@@ -246,6 +243,28 @@ def ban_user(request, user_id, room_id=None):
                 expires_at=expires_at
             )
             
+            # Create notification for banned user
+            Notification.objects.create(
+                recipient=target_user,
+                notification_type='moderation',
+                title='You have been banned',
+                message=f'You have been banned{"" if is_global else " from " + room.name}. Reason: {reason}',
+                related_room=action_room,
+                related_user=request.user
+            )
+            
+            # Broadcast to force disconnect
+            channel_layer = get_channel_layer()
+            if room:
+                async_to_sync(channel_layer.group_send)(
+                    f'chat_{room.slug}',
+                    {
+                        'type': 'force_disconnect',
+                        'user_id': target_user.id,
+                        'reason': f'You have been banned from {room.name}'
+                    }
+                )
+            
             scope = "globally" if is_global and not room else f"from {room.name}" if room else "globally"
             messages.success(request, f"{target_user.username} has been banned {scope}.")
             return redirect('moderation:dashboard')
@@ -261,11 +280,9 @@ def ban_user(request, user_id, room_id=None):
 
 @login_required
 def unban_user(request, user_id, room_id=None):
-    """Unban a user"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id) if room_id else None
     
-    # Permission check
     if room:
         if not can_moderate_room(request.user, room):
             return HttpResponseForbidden("You don't have permission.")
@@ -275,14 +292,19 @@ def unban_user(request, user_id, room_id=None):
     
     if request.method == 'POST':
         if not room:
-            # Remove global ban
             profile = get_object_or_404(UserProfile, user=target_user)
             profile.is_banned = False
             profile.ban_reason = ''
             profile.banned_until = None
             profile.save()
+        else:
+            ModerationAction.objects.filter(
+                target_user=target_user,
+                room=room,
+                action_type='ban',
+                is_active=True
+            ).update(is_active=False)
         
-        # Log the action
         ModerationAction.objects.create(
             moderator=request.user,
             target_user=target_user,
@@ -302,7 +324,6 @@ def unban_user(request, user_id, room_id=None):
 
 @login_required
 def mute_user(request, user_id, room_id):
-    """Mute a user in a specific room"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id)
     
@@ -323,7 +344,6 @@ def mute_user(request, user_id, room_id):
             if duration:
                 expires_at = timezone.now() + timezone.timedelta(minutes=duration)
             
-            # Create or update mute
             mute, created = RoomMute.objects.update_or_create(
                 user=target_user,
                 room=room,
@@ -334,7 +354,6 @@ def mute_user(request, user_id, room_id):
                 }
             )
             
-            # Log the action
             ModerationAction.objects.create(
                 moderator=request.user,
                 target_user=target_user,
@@ -343,6 +362,27 @@ def mute_user(request, user_id, room_id):
                 room=room,
                 duration=duration,
                 expires_at=expires_at
+            )
+            
+            # Notify user they are muted
+            Notification.objects.create(
+                recipient=target_user,
+                notification_type='moderation',
+                title='You have been muted',
+                message=f'You have been muted in {room.name}. Reason: {reason}',
+                related_room=room,
+                related_user=request.user
+            )
+            
+            # Broadcast mute status update
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'user_{target_user.id}',
+                {
+                    'type': 'mute_status',
+                    'is_muted': True,
+                    'expires_at': expires_at.isoformat() if expires_at else None
+                }
             )
             
             messages.success(request, f"{target_user.username} has been muted in {room.name}.")
@@ -359,7 +399,6 @@ def mute_user(request, user_id, room_id):
 
 @login_required
 def unmute_user(request, user_id, room_id):
-    """Unmute a user in a specific room"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id)
     
@@ -377,6 +416,17 @@ def unmute_user(request, user_id, room_id):
             room=room
         )
         
+        # Broadcast unmute
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'user_{target_user.id}',
+            {
+                'type': 'mute_status',
+                'is_muted': False,
+                'expires_at': None
+            }
+        )
+        
         messages.success(request, f"{target_user.username} has been unmuted.")
         return redirect('moderation:room_moderation', room_id=room.id)
     
@@ -388,7 +438,6 @@ def unmute_user(request, user_id, room_id):
 
 @login_required
 def kick_user(request, user_id, room_id):
-    """Kick a user from a room (remove membership)"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id)
     
@@ -408,19 +457,36 @@ def kick_user(request, user_id, room_id):
         if form.is_valid():
             reason = form.cleaned_data['reason']
             
-            # Remove membership
             RoomMembership.objects.filter(user=target_user, room=room).delete()
-            
-            # Also remove any mutes
             RoomMute.objects.filter(user=target_user, room=room).delete()
             
-            # Log the action
             ModerationAction.objects.create(
                 moderator=request.user,
                 target_user=target_user,
                 action_type='kick',
                 reason=reason,
                 room=room
+            )
+            
+            # Notify user they were kicked
+            Notification.objects.create(
+                recipient=target_user,
+                notification_type='moderation',
+                title='You have been kicked',
+                message=f'You have been kicked from {room.name}. Reason: {reason}',
+                related_room=room,
+                related_user=request.user
+            )
+            
+            # Broadcast kick to force disconnect
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'chat_{room.slug}',
+                {
+                    'type': 'force_disconnect',
+                    'user_id': target_user.id,
+                    'reason': f'You have been kicked from {room.name}'
+                }
             )
             
             messages.success(request, f"{target_user.username} has been kicked from {room.name}.")
@@ -437,7 +503,6 @@ def kick_user(request, user_id, room_id):
 
 @login_required
 def warn_user(request, user_id, room_id=None):
-    """Warn a user"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id) if room_id else None
     
@@ -468,8 +533,18 @@ def warn_user(request, user_id, room_id=None):
                 room=room
             )
             
-            scope = f"in {room.name}" if room else "globally"
-            messages.success(request, f"Warning issued to {target_user.username} {scope}.")
+            # Create notification for the warned user
+            scope = f"in {room.name}" if room else ""
+            Notification.objects.create(
+                recipient=target_user,
+                notification_type='warning',
+                title='You have received a warning',
+                message=f'Warning from {request.user.username}{scope}: {reason}',
+                related_room=room,
+                related_user=request.user
+            )
+            
+            messages.success(request, f"Warning issued to {target_user.username}.")
             
             if room:
                 return redirect('moderation:room_moderation', room_id=room.id)
@@ -486,7 +561,6 @@ def warn_user(request, user_id, room_id=None):
 
 @login_required
 def delete_message(request, message_id):
-    """Delete a message (soft delete)"""
     message = get_object_or_404(Message, id=message_id)
     
     if not can_moderate_room(request.user, message.room):
@@ -494,6 +568,8 @@ def delete_message(request, message_id):
     
     if request.method == 'POST':
         message.is_deleted = True
+        message.deleted_by = request.user
+        message.deleted_at = timezone.now()
         message.save()
         
         ModerationAction.objects.create(
@@ -504,29 +580,37 @@ def delete_message(request, message_id):
             room=message.room
         )
         
+        # Broadcast message deletion
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{message.room.slug}',
+            {
+                'type': 'message_deleted',
+                'message_id': message.id
+            }
+        )
+        
         messages.success(request, "Message has been deleted.")
         return redirect('chat:room_detail', slug=message.room.slug)
     
     return render(request, 'moderation/delete_message.html', {'message': message})
 
 
-# =============================================================================
-# Room Moderation
-# =============================================================================
-
 @login_required
 def room_moderation(request, room_id):
-    """Moderation panel for a specific room"""
     room = get_object_or_404(Room, id=room_id)
     
     if not can_moderate_room(request.user, room):
         return HttpResponseForbidden("You don't have permission to moderate this room.")
     
+    # Get members with fresh profile data - use annotate to check online status
     members = room.members.all().select_related('profile')
-    muted_users = RoomMute.objects.filter(room=room, expires_at__gt=timezone.now()) | \
-                  RoomMute.objects.filter(room=room, expires_at__isnull=True)
     
-    recent_reports = Report.objects.filter(message__room=room).order_by('-created_at')[:10]
+    muted_users = RoomMute.objects.filter(room=room).filter(
+        Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
+    )
+    
+    recent_reports = Report.objects.filter(room=room).order_by('-created_at')[:10]
     recent_actions = ModerationAction.objects.filter(room=room).order_by('-created_at')[:10]
     
     context = {
@@ -539,14 +623,9 @@ def room_moderation(request, room_id):
     return render(request, 'moderation/room_moderation.html', context)
 
 
-# =============================================================================
-# Admin User Management
-# =============================================================================
-
 @login_required
 @user_passes_test(is_staff_or_admin)
 def admin_user_list(request):
-    """List all users for admin management"""
     search = request.GET.get('search', '')
     users = User.objects.all().select_related('profile')
     
@@ -569,7 +648,6 @@ def admin_user_list(request):
 @login_required
 @user_passes_test(is_staff_or_admin)
 def admin_user_edit(request, user_id):
-    """Edit user account (admin only)"""
     target_user = get_object_or_404(User, id=user_id)
     profile, _ = UserProfile.objects.get_or_create(user=target_user)
     
@@ -578,7 +656,6 @@ def admin_user_edit(request, user_id):
         if form.is_valid():
             form.save()
             
-            # Handle profile disable
             is_disabled = request.POST.get('is_disabled') == 'on'
             profile.is_disabled = is_disabled
             profile.save()
@@ -598,7 +675,6 @@ def admin_user_edit(request, user_id):
 @login_required
 @user_passes_test(is_staff_or_admin)
 def admin_user_delete(request, user_id):
-    """Delete user account (admin only)"""
     target_user = get_object_or_404(User, id=user_id)
     
     if target_user == request.user:
@@ -623,7 +699,6 @@ def admin_user_delete(request, user_id):
 @login_required
 @user_passes_test(is_staff_or_admin)
 def moderation_logs(request):
-    """View all moderation action logs"""
     action_type = request.GET.get('type', 'all')
     actions = ModerationAction.objects.all().select_related(
         'moderator', 'target_user', 'room'
@@ -643,12 +718,7 @@ def moderation_logs(request):
     })
 
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
 def get_moderable_rooms(user):
-    """Get all rooms a user can moderate"""
     if user.is_staff or user.is_superuser:
         return Room.objects.all()
     
@@ -663,13 +733,8 @@ def get_moderable_rooms(user):
     ).distinct()
 
 
-# =============================================================================
-# AJAX Endpoints
-# =============================================================================
-
 @login_required
 def check_user_muted(request, user_id, room_id):
-    """Check if a user is muted in a room (AJAX)"""
     user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id)
     

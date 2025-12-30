@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Report User - {{ target_user.username }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="bi bi-flag"></i> Report User</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-4">
+                        You are reporting <strong>{{ target_user.username }}</strong> in <strong>{{ room.name }}</strong>.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">
+                                Why are you reporting this user?
+                            </label>
+                            <textarea name="reason" id="reason" class="form-control" rows="4" required placeholder="Please describe the issue..."></textarea>
+                            <small class="form-text text-muted">
+                                Please provide details about the user's behavior.
+                            </small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-flag"></i> Submit Report
+                            </button>
+                            <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -13,7 +13,9 @@ class Report(models.Model):
     ]
     
     reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports_made')
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='reports')
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, null=True, blank=True, related_name='reports')
+    reported_user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='reports_against')
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, null=True, blank=True, related_name='reports')
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     reviewed_by = models.ForeignKey(
@@ -64,7 +66,6 @@ class ModerationAction(models.Model):
         return f"{self.action_type} - {self.target_user.username} {scope} by {self.moderator.username}"
     
     def save(self, *args, **kwargs):
-        # Calculate expires_at if duration is set
         if self.duration and not self.expires_at:
             self.expires_at = timezone.now() + timezone.timedelta(minutes=self.duration)
         super().save(*args, **kwargs)
@@ -97,7 +98,7 @@ class RoomMute(models.Model):
     @property
     def is_active(self):
         if not self.expires_at:
-            return True  # Permanent mute
+            return True
         return timezone.now() < self.expires_at
 
 

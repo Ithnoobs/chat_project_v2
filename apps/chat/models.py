@@ -48,6 +48,7 @@ class RoomMembership(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='member')
     joined_at = models.DateTimeField(auto_now_add=True)
+    last_read_at = models.DateTimeField(null=True, blank=True)  # Track last read time
     
     class Meta:
         unique_together = ['user', 'room']
@@ -59,7 +60,8 @@ class RoomMembership(models.Model):
 class Message(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='messages')
-    content = models.TextField()
+    content = models.TextField(blank=True)  # Allow blank for image-only messages
+    image = models.ImageField(upload_to='chat_images/%Y/%m/%d/', blank=True, null=True)
     parent = models.ForeignKey(
         'self', on_delete=models.CASCADE, null=True, blank=True, 
         related_name='replies'
@@ -74,7 +76,7 @@ class Message(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"{self.sender.username}: {self.content[:50]}"
+        return f"{self.sender.username}: {self.content[:50] if self.content else '[Image]'}"
     
     class Meta:
         ordering = ['created_at']
