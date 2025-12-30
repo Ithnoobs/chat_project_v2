@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Room - {{ room.name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-trash"></i> Delete Room</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5><i class="bi bi-exclamation-triangle"></i> Warning!</h5>
+                        <p class="mb-0">You are about to permanently delete the room <strong>{{ room.name }}</strong>.</p>
+                        <p class="mb-0 mt-2">This will delete:</p>
+                        <ul class="mb-0">
+                            <li>All messages in this room</li>
+                            <li>All memberships</li>
+                            <li>All reports related to this room</li>
+                        </ul>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Yes, Delete Room
+                            </button>
+                            <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

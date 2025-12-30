@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+
+{% block title %}Moderation Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-shield-check"></i> Moderation</h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="{% url 'moderation:dashboard' %}" class="list-group-item list-group-item-action active">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                    <a href="{% url 'moderation:reports_list' %}" class="list-group-item list-group-item-action">
+                        <i class="bi bi-flag"></i> Reports
+                        {% if pending_reports_count %}
+                        <span class="badge bg-danger float-end">{{ pending_reports_count }}</span>
+                        {% endif %}
+                    </a>
+                    {% if is_global_admin %}
+                    <a href="{% url 'moderation:admin_user_list' %}" class="list-group-item list-group-item-action">
+                        <i class="bi bi-people"></i> Manage Users
+                    </a>
+                    <a href="{% url 'moderation:logs' %}" class="list-group-item list-group-item-action">
+                        <i class="bi bi-journal-text"></i> Action Logs
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Rooms List -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="bi bi-door-open"></i> Your Rooms</h6>
+                </div>
+                <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                    {% for room in moderable_rooms %}
+                    <a href="{% url 'moderation:room_moderation' room.id %}" class="list-group-item list-group-item-action">
+                        <small>
+                            {% if room.room_type == 'private' %}
+                            <i class="bi bi-lock"></i>
+                            {% else %}
+                            <i class="bi bi-globe"></i>
+                            {% endif %}
+                            {{ room.name }}
+                        </small>
+                    </a>
+                    {% empty %}
+                    <div class="list-group-item text-muted">
+                        <small>No rooms to moderate</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="col-md-9">
+            <h2 class="mb-4">
+                <i class="bi bi-shield-check"></i> Moderation Dashboard
+                {% if is_global_admin %}
+                <span class="badge bg-danger">Admin</span>
+                {% endif %}
+            </h2>
+            
+            <!-- Stats Cards -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body">
+                            <h3 class="card-title">{{ pending_reports_count }}</h3>
+                            <p class="card-text">Pending Reports</p>
+                            <a href="{% url 'moderation:reports_list' %}?status=pending" class="btn btn-sm btn-dark">View</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h3 class="card-title">{{ moderable_rooms.count }}</h3>
+                            <p class="card-text">Rooms to Moderate</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h3 class="card-title">{{ recent_actions.count }}</h3>
+                            <p class="card-text">Recent Actions</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <!-- Pending Reports -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0"><i class="bi bi-flag"></i> Pending Reports</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            {% if pending_reports %}
+                            <div class="list-group list-group-flush">
+                                {% for report in pending_reports %}
+                                <a href="{% url 'moderation:review_report' report.id %}" class="list-group-item list-group-item-action">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <strong>{{ report.reported_by.username }}</strong>
+                                        <small class="text-muted">{{ report.created_at|timesince }} ago</small>
+                                    </div>
+                                    <small class="text-muted">
+                                        Reported message in <strong>{{ report.message.room.name }}</strong>
+                                    </small>
+                                    <p class="mb-0 small">{{ report.reason|truncatewords:15 }}</p>
+                                </a>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                                <p class="mb-0">No pending reports!</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% if pending_reports %}
+                        <div class="card-footer">
+                            <a href="{% url 'moderation:reports_list' %}" class="btn btn-sm btn-warning">View All Reports</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Recent Actions -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Actions</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            {% if recent_actions %}
+                            <div class="list-group list-group-flush">
+                                {% for action in recent_actions %}
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <span>
+                                            <span class="badge 
+                                                {% if action.action_type == 'ban' %}bg-danger
+                                                {% elif action.action_type == 'mute' %}bg-warning text-dark
+                                                {% elif action.action_type == 'warn' %}bg-info
+                                                {% elif action.action_type == 'kick' %}bg-secondary
+                                                {% elif action.action_type == 'delete' %}bg-dark
+                                                {% else %}bg-success{% endif %}">
+                                                {{ action.action_type|upper }}
+                                            </span>
+                                            <strong>{{ action.target_user.username }}</strong>
+                                        </span>
+                                        <small class="text-muted">{{ action.created_at|timesince }} ago</small>
+                                    </div>
+                                    <small class="text-muted">
+                                        by {{ action.moderator.username }}
+                                        {% if action.room %}in {{ action.room.name }}{% endif %}
+                                    </small>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-journal" style="font-size: 2rem;"></i>
+                                <p class="mb-0">No recent actions</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

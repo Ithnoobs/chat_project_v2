@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="bi bi-bell"></i> Notifications
+            {% if unread_count %}
+            <span class="badge bg-danger">{{ unread_count }}</span>
+            {% endif %}
+        </h2>
+        <div>
+            {% if notifications %}
+            <form method="post" action="{% url 'notifications:mark_all_read' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-check-all"></i> Mark All Read
+                </button>
+            </form>
+            <form method="post" action="{% url 'notifications:clear_all' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete all notifications?')">
+                    <i class="bi bi-trash"></i> Clear All
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Type</label>
+                    <select name="type" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="all">All Types</option>
+                        <option value="mention" {% if notif_type == 'mention' %}selected{% endif %}>Mentions</option>
+                        <option value="message" {% if notif_type == 'message' %}selected{% endif %}>Messages</option>
+                        <option value="invite" {% if notif_type == 'invite' %}selected{% endif %}>Invitations</option>
+                        <option value="reply" {% if notif_type == 'reply' %}selected{% endif %}>Replies</option>
+                        <option value="warning" {% if notif_type == 'warning' %}selected{% endif %}>Warnings</option>
+                        <option value="moderation" {% if notif_type == 'moderation' %}selected{% endif %}>Moderation</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status</label>
+                    <select name="read" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="all">All</option>
+                        <option value="unread" {% if read_filter == 'unread' %}selected{% endif %}>Unread</option>
+                        <option value="read" {% if read_filter == 'read' %}selected{% endif %}>Read</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notifications List -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            {% if notifications %}
+            <div class="list-group list-group-flush">
+                {% for notification in notifications %}
+                <div class="list-group-item {% if not notification.is_read %}bg-light{% endif %}">
+                    <div class="d-flex w-100 justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-1">
+                                {% if notification.notification_type == 'mention' %}
+                                <span class="badge bg-primary me-2"><i class="bi bi-at"></i> Mention</span>
+                                {% elif notification.notification_type == 'message' %}
+                                <span class="badge bg-info me-2"><i class="bi bi-chat"></i> Message</span>
+                                {% elif notification.notification_type == 'invite' %}
+                                <span class="badge bg-success me-2"><i class="bi bi-envelope"></i> Invite</span>
+                                {% elif notification.notification_type == 'reply' %}
+                                <span class="badge bg-secondary me-2"><i class="bi bi-reply"></i> Reply</span>
+                                {% elif notification.notification_type == 'warning' %}
+                                <span class="badge bg-warning text-dark me-2"><i class="bi bi-exclamation-triangle"></i> Warning</span>
+                                {% elif notification.notification_type == 'moderation' %}
+                                <span class="badge bg-danger me-2"><i class="bi bi-shield"></i> Moderation</span>
+                                {% endif %}
+                                <strong>{{ notification.title }}</strong>
+                                {% if not notification.is_read %}
+                                <span class="badge bg-danger ms-2">New</span>
+                                {% endif %}
+                            </div>
+                            <p class="mb-1">{{ notification.message }}</p>
+                            <small class="text-muted">{{ notification.created_at|timesince }} ago</small>
+                            {% if notification.related_room %}
+                            <br>
+                            <small>
+                                <a href="{% url 'chat:room_detail' notification.related_room.slug %}">
+                                    <i class="bi bi-door-open"></i> {{ notification.related_room.name }}
+                                </a>
+                            </small>
+                            {% endif %}
+                        </div>
+                        <div class="ms-3">
+                            {% if not notification.is_read %}
+                            <a href="{% url 'notifications:mark_read' notification.id %}" class="btn btn-sm btn-outline-primary" title="Mark as read">
+                                <i class="bi bi-check"></i>
+                            </a>
+                            {% endif %}
+                            <form method="post" action="{% url 'notifications:delete' notification.id %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-bell-slash" style="font-size: 3rem;"></i>
+                <p class="mt-3">No notifications</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if notifications.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if notifications.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ notifications.previous_page_number }}&type={{ notif_type }}&read={{ read_filter }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for num in notifications.paginator.page_range %}
+            {% if notifications.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > notifications.number|add:'-3' and num < notifications.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}&type={{ notif_type }}&read={{ read_filter }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            
+            {% if notifications.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ notifications.next_page_number }}&type={{ notif_type }}&read={{ read_filter }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

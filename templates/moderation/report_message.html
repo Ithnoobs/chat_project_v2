@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Report Message{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="bi bi-flag"></i> Report Message</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Message Being Reported -->
+                    <div class="alert alert-secondary mb-4">
+                        <small class="text-muted">Message you are reporting:</small>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ message.sender.username }}</strong>
+                            <small>{{ message.created_at|date:"M d, Y H:i" }}</small>
+                        </div>
+                        <p class="mb-0 mt-2">{{ message.content }}</p>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.reason.id_for_label }}" class="form-label">
+                                Why are you reporting this message?
+                            </label>
+                            {{ form.reason }}
+                            {% if form.reason.errors %}
+                            <div class="text-danger small">{{ form.reason.errors }}</div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Please provide details about why this message violates our guidelines.
+                            </small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-flag"></i> Submit Report
+                            </button>
+                            <a href="{% url 'chat:room_detail' message.room.slug %}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

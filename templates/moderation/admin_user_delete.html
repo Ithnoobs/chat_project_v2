@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete User - Admin{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-trash"></i> Delete User</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <h5><i class="bi bi-exclamation-triangle"></i> Warning!</h5>
+                        <p>You are about to permanently delete the user <strong>{{ target_user.username }}</strong>.</p>
+                        <p class="mb-0">This will delete:</p>
+                        <ul class="mb-0">
+                            <li>All their messages</li>
+                            <li>All rooms they created</li>
+                            <li>All their profile data</li>
+                        </ul>
+                    </div>
+                    
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Username:</th>
+                            <td>{{ target_user.username }}</td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ target_user.email }}</td>
+                        </tr>
+                        <tr>
+                            <th>Joined:</th>
+                            <td>{{ target_user.date_joined|date:"F d, Y" }}</td>
+                        </tr>
+                    </table>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Yes, Delete User
+                            </button>
+                            <a href="{% url 'moderation:admin_user_list' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

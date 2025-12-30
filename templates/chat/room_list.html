@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat Rooms{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-chat-dots"></i> Chat Rooms</h2>
+        <a href="{% url 'chat:create_room' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Create Room
+        </a>
+    </div>
+    
+    <div class="row">
+        <!-- Your Rooms -->
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-star"></i> Your Rooms</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if user_rooms %}
+                    <div class="list-group list-group-flush">
+                        {% for room in user_rooms %}
+                        <a href="{% url 'chat:room_detail' room.slug %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    {% if room.room_type == 'private' %}
+                                    <i class="bi bi-lock"></i>
+                                    {% else %}
+                                    <i class="bi bi-globe"></i>
+                                    {% endif %}
+                                    {{ room.name }}
+                                </h6>
+                                {% if room.created_by == user %}
+                                <span class="badge bg-warning text-dark">Owner</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">{{ room.description|truncatewords:10 }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                        <p class="mb-0">You haven't joined any rooms yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Public Rooms -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-globe"></i> Public Rooms</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if public_rooms %}
+                    <div class="list-group list-group-flush">
+                        {% for room in public_rooms %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ room.name }}</h6>
+                                    <small class="text-muted">{{ room.description|truncatewords:10 }}</small>
+                                </div>
+                                <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-sm btn-outline-success">
+                                    Join
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-emoji-frown" style="font-size: 2rem;"></i>
+                        <p class="mb-0">No public rooms available.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

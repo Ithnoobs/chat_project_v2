@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Users - Admin{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-people"></i> Manage Users</h2>
+        <a href="{% url 'moderation:dashboard' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+    
+    <!-- Search -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" placeholder="Search by username or email" value="{{ search }}">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Users Table -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                            <th>Last Seen</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>
+                                {{ user.username }}
+                                {% if user.is_superuser %}
+                                <span class="badge bg-danger">Superuser</span>
+                                {% elif user.is_staff %}
+                                <span class="badge bg-warning text-dark">Staff</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.email }}</td>
+                            <td>
+                                {% if user.profile.is_banned %}
+                                <span class="badge bg-danger">Banned</span>
+                                {% elif user.profile.is_disabled %}
+                                <span class="badge bg-secondary">Disabled</span>
+                                {% elif not user.is_active %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% else %}
+                                <span class="badge bg-success">Active</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ user.date_joined|date:"M d, Y" }}</small></td>
+                            <td><small>{{ user.profile.last_seen|date:"M d, Y H:i" }}</small></td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'moderation:admin_user_edit' user.id %}" class="btn btn-outline-primary" title="Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    {% if not user.profile.is_banned %}
+                                    <a href="{% url 'moderation:ban_user' user.id %}" class="btn btn-outline-danger" title="Ban">
+                                        <i class="bi bi-slash-circle"></i>
+                                    </a>
+                                    {% else %}
+                                    <a href="{% url 'moderation:unban_user' user.id %}" class="btn btn-outline-success" title="Unban">
+                                        <i class="bi bi-check-circle"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if user != request.user %}
+                                    <a href="{% url 'moderation:admin_user_delete' user.id %}" class="btn btn-outline-danger" title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                No users found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if users.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if users.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ users.previous_page_number }}&search={{ search }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for num in users.paginator.page_range %}
+            {% if users.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > users.number|add:'-3' and num < users.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}&search={{ search }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            
+            {% if users.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ users.next_page_number }}&search={{ search }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

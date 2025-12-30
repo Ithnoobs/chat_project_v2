@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit User - Admin{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-person-gear"></i> Edit User: {{ target_user.username }}</h2>
+                <a href="{% url 'moderation:admin_user_list' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <h5 class="mb-3">Account Information</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Username</label>
+                                {{ form.username }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                {{ form.email }}
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">First Name</label>
+                                {{ form.first_name }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Last Name</label>
+                                {{ form.last_name }}
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        <h5 class="mb-3">Permissions & Status</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input type="checkbox" name="is_active" id="is_active" class="form-check-input" {% if target_user.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">Account Active</label>
+                                </div>
+                                <small class="form-text text-muted">Inactive accounts cannot log in.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input type="checkbox" name="is_staff" id="is_staff" class="form-check-input" {% if target_user.is_staff %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_staff">Staff Status</label>
+                                </div>
+                                <small class="form-text text-muted">Staff can access global moderation.</small>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input type="checkbox" name="is_disabled" id="is_disabled" class="form-check-input" {% if profile.is_disabled %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_disabled">Account Disabled</label>
+                                </div>
+                                <small class="form-text text-muted">Disabled accounts are soft-blocked.</small>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        <h5 class="mb-3">Ban Status</h5>
+                        
+                        <div class="alert {% if profile.is_banned %}alert-danger{% else %}alert-success{% endif %}">
+                            {% if profile.is_banned %}
+                            <strong><i class="bi bi-slash-circle"></i> This user is banned.</strong>
+                            {% if profile.banned_until %}
+                            <br>Expires: {{ profile.banned_until|date:"F d, Y H:i" }}
+                            {% else %}
+                            <br>Permanent ban
+                            {% endif %}
+                            {% if profile.ban_reason %}
+                            <br>Reason: {{ profile.ban_reason }}
+                            {% endif %}
+                            <div class="mt-2">
+                                <a href="{% url 'moderation:unban_user' target_user.id %}" class="btn btn-success btn-sm">
+                                    <i class="bi bi-check-circle"></i> Remove Ban
+                                </a>
+                            </div>
+                            {% else %}
+                            <i class="bi bi-check-circle"></i> This user is not banned.
+                            <div class="mt-2">
+                                <a href="{% url 'moderation:ban_user' target_user.id %}" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-slash-circle"></i> Ban User
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Save Changes
+                            </button>
+                            <a href="{% url 'moderation:admin_user_list' %}" class="btn btn-secondary">Cancel</a>
+                            <a href="{% url 'moderation:admin_user_delete' target_user.id %}" class="btn btn-outline-danger ms-auto">
+                                <i class="bi bi-trash"></i> Delete User
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

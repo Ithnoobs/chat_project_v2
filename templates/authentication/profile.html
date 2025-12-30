@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile - Chat App{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-person-circle"></i> My Profile</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Avatar Section -->
+                        <div class="col-md-4 text-center mb-4">
+                            {% if profile.avatar %}
+                                <img src="{{ profile.avatar.url }}" alt="Avatar" class="rounded-circle img-fluid mb-3" style="width: 150px; height: 150px; object-fit: cover;">
+                            {% else %}
+                                <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 150px; height: 150px;">
+                                    <i class="bi bi-person-fill text-white" style="font-size: 4rem;"></i>
+                                </div>
+                            {% endif %}
+                            <h5>{{ user.username }}</h5>
+                            <span class="badge {% if profile.online_status == 'online' %}bg-success{% elif profile.online_status == 'away' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ profile.online_status|title }}
+                            </span>
+                        </div>
+                        
+                        <!-- Profile Details -->
+                        <div class="col-md-8">
+                            <h5>Account Information</h5>
+                            <table class="table">
+                                <tr>
+                                    <th style="width: 150px;">Username:</th>
+                                    <td>{{ user.username }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Email:</th>
+                                    <td>{{ user.email }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Full Name:</th>
+                                    <td>{{ user.first_name }} {{ user.last_name }}{% if not user.first_name and not user.last_name %}<span class="text-muted">Not set</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <th>Member Since:</th>
+                                    <td>{{ user.date_joined|date:"F d, Y" }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Last Seen:</th>
+                                    <td>{{ profile.last_seen|date:"F d, Y H:i" }}</td>
+                                </tr>
+                            </table>
+                            
+                            <h5 class="mt-4">Bio</h5>
+                            <p class="text-muted">
+                                {% if profile.bio %}
+                                    {{ profile.bio }}
+                                {% else %}
+                                    <em>No bio set yet.</em>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <hr>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'edit_profile' %}" class="btn btn-primary">
+                            <i class="bi bi-pencil"></i> Edit Profile
+                        </a>
+                        <a href="{% url 'edit_account' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-gear"></i> Edit Account
+                        </a>
+                        <a href="{% url 'change_password' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-key"></i> Change Password
+                        </a>
+                        <a href="{% url 'delete_account' %}" class="btn btn-outline-danger">
+                            <i class="bi bi-trash"></i> Delete Account
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

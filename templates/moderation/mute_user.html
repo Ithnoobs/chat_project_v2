@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Mute User - Moderation{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="bi bi-mic-mute"></i> Mute User</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        Muting <strong>{{ target_user.username }}</strong> in <strong>{{ room.name }}</strong> will prevent them from sending messages in this room.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Reason for muting</label>
+                            {{ form.reason }}
+                            {% if form.reason.errors %}
+                            <div class="text-danger small">{{ form.reason.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Duration (minutes)</label>
+                            {{ form.duration }}
+                            <small class="form-text text-muted">
+                                Leave empty for a permanent mute. Example: 30 = 30 minutes, 60 = 1 hour
+                            </small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-mic-mute"></i> Mute User
+                            </button>
+                            <a href="{% url 'moderation:room_moderation' room.id %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Account - Chat App{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Delete Account</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5><i class="bi bi-exclamation-circle"></i> Warning!</h5>
+                        <p class="mb-0">This action is <strong>permanent</strong> and cannot be undone. All your data will be deleted, including:</p>
+                        <ul class="mb-0 mt-2">
+                            <li>Your profile and account information</li>
+                            <li>All messages you have sent</li>
+                            <li>All rooms you have created</li>
+                            <li>Your membership in all rooms</li>
+                        </ul>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="id_password" class="form-label">Enter your password to confirm</label>
+                            {{ form.password }}
+                            {% if form.password.errors %}
+                            <div class="text-danger small">{{ form.password.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" name="confirm" id="id_confirm" class="form-check-input" required>
+                            <label for="id_confirm" class="form-check-label">
+                                I understand this action is permanent and cannot be undone
+                            </label>
+                            {% if form.confirm.errors %}
+                            <div class="text-danger small">{{ form.confirm.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Delete My Account
+                            </button>
+                            <a href="{% url 'profile' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

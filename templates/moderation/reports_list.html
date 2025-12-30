@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Reports - Moderation{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-flag"></i> Reports</h2>
+        <a href="{% url 'moderation:dashboard' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+    
+    <!-- Filter -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Filter by Status</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="reviewed" {% if status_filter == 'reviewed' %}selected{% endif %}>Reviewed</option>
+                        <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolved</option>
+                        <option value="dismissed" {% if status_filter == 'dismissed' %}selected{% endif %}>Dismissed</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Reports Table -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Reporter</th>
+                            <th>Message</th>
+                            <th>Room</th>
+                            <th>Status</th>
+                            <th>Reported</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in reports %}
+                        <tr>
+                            <td>{{ report.reported_by.username }}</td>
+                            <td>
+                                <small class="text-muted">
+                                    <strong>{{ report.message.sender.username }}:</strong>
+                                    {{ report.message.content|truncatewords:10 }}
+                                </small>
+                            </td>
+                            <td>{{ report.message.room.name }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if report.status == 'pending' %}bg-warning text-dark
+                                    {% elif report.status == 'reviewed' %}bg-info
+                                    {% elif report.status == 'resolved' %}bg-success
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ report.status|title }}
+                                </span>
+                            </td>
+                            <td><small>{{ report.created_at|timesince }} ago</small></td>
+                            <td>
+                                <a href="{% url 'moderation:review_report' report.id %}" class="btn btn-sm btn-primary">
+                                    Review
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                No reports found.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if reports.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if reports.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ reports.previous_page_number }}&status={{ status_filter }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for num in reports.paginator.page_range %}
+            <li class="page-item {% if reports.number == num %}active{% endif %}">
+                <a class="page-link" href="?page={{ num }}&status={{ status_filter }}">{{ num }}</a>
+            </li>
+            {% endfor %}
+            
+            {% if reports.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ reports.next_page_number }}&status={{ status_filter }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

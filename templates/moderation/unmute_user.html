@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Unmute User - Moderation{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-mic"></i> Unmute User</h4>
+                </div>
+                <div class="card-body">
+                    <p>Are you sure you want to unmute <strong>{{ target_user.username }}</strong> in <strong>{{ room.name }}</strong>?</p>
+                    <p class="text-muted">They will be able to send messages in this room again.</p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-mic"></i> Yes, Unmute
+                            </button>
+                            <a href="{% url 'moderation:room_moderation' room.id %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

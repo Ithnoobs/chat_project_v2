@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}Review Report - Moderation{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-flag-fill"></i> Review Report</h2>
+                <a href="{% url 'moderation:reports_list' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+            
+            <!-- Report Details -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">Report Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Reported by:</strong> {{ report.reported_by.username }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Reported:</strong> {{ report.created_at|date:"F d, Y H:i" }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Reason:</strong>
+                        <p class="mb-0">{{ report.reason }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Reported Message -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Reported Message</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-secondary">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ report.message.sender.username }}</strong>
+                            <small class="text-muted">{{ report.message.created_at|date:"F d, Y H:i" }}</small>
+                        </div>
+                        <p class="mb-0 mt-2">{{ report.message.content }}</p>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            Room: <a href="{% url 'chat:room_detail' report.message.room.slug %}">{{ report.message.room.name }}</a>
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'moderation:delete_message' report.message.id %}" class="btn btn-outline-danger">
+                            <i class="bi bi-trash"></i> Delete Message
+                        </a>
+                        <a href="{% url 'moderation:warn_user_room' report.message.sender.id report.message.room.id %}" class="btn btn-outline-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Warn User
+                        </a>
+                        <a href="{% url 'moderation:mute_user' report.message.sender.id report.message.room.id %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-mic-mute"></i> Mute User
+                        </a>
+                        <a href="{% url 'moderation:kick_user' report.message.sender.id report.message.room.id %}" class="btn btn-outline-dark">
+                            <i class="bi bi-door-open"></i> Kick User
+                        </a>
+                        <a href="{% url 'moderation:ban_user_room' report.message.sender.id report.message.room.id %}" class="btn btn-danger">
+                            <i class="bi bi-slash-circle"></i> Ban User
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Review Form -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Update Report Status</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            {{ form.status }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Resolution Notes</label>
+                            {{ form.resolution_notes }}
+                            <small class="form-text text-muted">Document what action was taken</small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Update Report
+                            </button>
+                            <a href="{% url 'moderation:reports_list' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
