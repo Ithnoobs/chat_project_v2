@@ -133,6 +133,7 @@ def moderation_dashboard(request):
 def reports_list(request):
     user = request.user
     status_filter = request.GET.get('status', 'all')
+    room_filter = request.GET.get('room')
     
     if user.is_staff or user.is_superuser:
         reports = Report.objects.all()
@@ -142,6 +143,11 @@ def reports_list(request):
     
     if status_filter != 'all':
         reports = reports.filter(status=status_filter)
+    
+    if room_filter:
+        reports = reports.filter(room_id=room_filter)
+    
+    reports = reports.order_by('-created_at')
     
     paginator = Paginator(reports, 20)
     page = request.GET.get('page')
@@ -203,76 +209,117 @@ def ban_user(request, user_id, room_id=None):
         messages.error(request, "You cannot ban yourself.")
         return redirect('moderation:dashboard')
     
+    # Can't ban room owner
+    if room and target_user == room.created_by:
+        messages.error(request, "You cannot ban the room owner.")
+        return redirect('moderation:room_moderation', room_id=room.id)
+    
     # Can't ban admins unless you're superuser
     if target_user.is_staff and not request.user.is_superuser:
         messages.error(request, "You cannot ban staff members.")
         return redirect('moderation:dashboard')
     
     if request.method == 'POST':
-        form = BanUserForm(request.POST)
-        if form.is_valid():
-            reason = form.cleaned_data['reason']
-            duration = form.cleaned_data.get('duration')
-            is_global = form.cleaned_data.get('is_global', False)
-            
-            expires_at = None
-            if duration:
-                expires_at = timezone.now() + timezone.timedelta(minutes=duration)
-            
-            if is_global and (request.user.is_staff or request.user.is_superuser):
-                # Global ban - update user profile
-                profile, _ = UserProfile.objects.get_or_create(user=target_user)
-                profile.is_banned = True
-                profile.ban_reason = reason
-                profile.banned_until = expires_at
-                profile.save()
-                action_room = None
-            else:
-                # Room-specific ban - remove from room
-                RoomMembership.objects.filter(user=target_user, room=room).delete()
-                action_room = room
-            
-            # Log the action
-            ModerationAction.objects.create(
-                moderator=request.user,
-                target_user=target_user,
-                action_type='ban',
-                reason=reason,
-                room=action_room,
-                duration=duration,
-                expires_at=expires_at
-            )
-            
-            # Create notification for banned user
-            Notification.objects.create(
-                recipient=target_user,
-                notification_type='moderation',
-                title='You have been banned',
-                message=f'You have been banned{"" if is_global else " from " + room.name}. Reason: {reason}',
-                related_room=action_room,
-                related_user=request.user
-            )
-            
-            # Broadcast to force disconnect
+        reason = request.POST.get('reason', 'No reason provided')
+        duration = request.POST.get('duration')
+        is_global = request.POST.get('is_global') == 'on'
+        
+        expires_at = None
+        if duration and duration.isdigit() and int(duration) > 0:
+            expires_at = timezone.now() + timezone.timedelta(minutes=int(duration))
+        
+        if is_global and (request.user.is_staff or request.user.is_superuser):
+            # Global ban - update user profile
+            profile, _ = UserProfile.objects.get_or_create(user=target_user)
+            profile.is_banned = True
+            profile.ban_reason = reason
+            profile.banned_until = expires_at
+            profile.save()
+            action_room = None
+        else:
+            # Room-specific ban - remove from room
+            RoomMembership.objects.filter(user=target_user, room=room).delete()
+            action_room = room
+        
+        # Log the action
+        ModerationAction.objects.create(
+            moderator=request.user,
+            target_user=target_user,
+            action_type='ban',
+            reason=reason,
+            room=action_room,
+            duration=int(duration) if duration and duration.isdigit() else None,
+            expires_at=expires_at,
+            is_active=True
+        )
+        
+        # Create notification for banned user
+        Notification.objects.create(
+            recipient=target_user,
+            notification_type='moderation',
+            title='You have been banned',
+            message=f'You have been banned{"" if is_global else " from " + room.name}. Reason: {reason}',
+            related_room=action_room,
+            related_user=request.user
+        )
+        
+        # Broadcast force disconnect via WebSocket
+        if room:
             channel_layer = get_channel_layer()
-            if room:
-                async_to_sync(channel_layer.group_send)(
-                    f'chat_{room.slug}',
-                    {
-                        'type': 'force_disconnect',
-                        'user_id': target_user.id,
-                        'reason': f'You have been banned from {room.name}'
-                    }
-                )
-            
-            scope = "globally" if is_global and not room else f"from {room.name}" if room else "globally"
-            messages.success(request, f"{target_user.username} has been banned {scope}.")
-            return redirect('moderation:dashboard')
-    else:
-        form = BanUserForm()
+            async_to_sync(channel_layer.group_send)(
+                f'chat_{room.slug}',
+                {
+                    'type': 'force_disconnect',
+                    'user_id': target_user.id,
+                    'action': 'ban',
+                    'reason': f'You have been banned from {room.name}. Reason: {reason}'
+                }
+            )
+        
+        scope = "globally" if is_global and not room else f"from {room.name}" if room else "globally"
+        messages.success(request, f"{target_user.username} has been banned {scope}.")
+        
+        if room:
+            return redirect('moderation:room_moderation', room_id=room.id)
+        return redirect('moderation:dashboard')
     
     return render(request, 'moderation/ban_user.html', {
-        'form': form,
+        'target_user': target_user,
+        'room': room,
+    })
+
+
+@login_required
+def unban_user_room(request, user_id, room_id):
+    """Unban a user from a specific room"""
+    target_user = get_object_or_404(User, id=user_id)
+    room = get_object_or_404(Room, id=room_id)
+    
+    if not can_moderate_room(request.user, room):
+        return HttpResponseForbidden("You don't have permission.")
+    
+    if request.method == 'POST':
+        # Deactivate room-specific ban
+        ModerationAction.objects.filter(
+            target_user=target_user,
+            room=room,
+            action_type='ban',
+            is_active=True
+        ).update(is_active=False)
+        
+        # Log the unban action
+        ModerationAction.objects.create(
+            moderator=request.user,
+            target_user=target_user,
+            action_type='unban',
+            reason='Ban removed by moderator',
+            room=room
+        )
+        
+        messages.success(request, f"{target_user.username} has been unbanned from {room.name}.")
+        return redirect('moderation:room_moderation', room_id=room.id)
+    
+    return render(request, 'moderation/unban_user.html', {
         'target_user': target_user,
         'room': room,
     })
@@ -280,6 +327,7 @@ def ban_user(request, user_id, room_id=None):
 
 @login_required
 def unban_user(request, user_id, room_id=None):
+    """Unban a user (global or room-specific)"""
     target_user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id) if room_id else None
     
@@ -292,12 +340,14 @@ def unban_user(request, user_id, room_id=None):
     
     if request.method == 'POST':
         if not room:
+            # Remove global ban
             profile = get_object_or_404(UserProfile, user=target_user)
             profile.is_banned = False
             profile.ban_reason = ''
             profile.banned_until = None
             profile.save()
         else:
+            # Remove room-specific ban
             ModerationAction.objects.filter(
                 target_user=target_user,
                 room=room,
@@ -314,6 +364,9 @@ def unban_user(request, user_id, room_id=None):
         )
         
         messages.success(request, f"{target_user.username} has been unbanned.")
+        
+        if room:
+            return redirect('moderation:room_moderation', room_id=room.id)
         return redirect('moderation:dashboard')
     
     return render(request, 'moderation/unban_user.html', {
@@ -334,64 +387,67 @@ def mute_user(request, user_id, room_id):
         messages.error(request, "You cannot mute yourself.")
         return redirect('moderation:room_moderation', room_id=room.id)
     
+    if target_user == room.created_by:
+        messages.error(request, "You cannot mute the room owner.")
+        return redirect('moderation:room_moderation', room_id=room.id)
+    
     if request.method == 'POST':
-        form = MuteUserForm(request.POST)
-        if form.is_valid():
-            reason = form.cleaned_data['reason']
-            duration = form.cleaned_data.get('duration')
-            
-            expires_at = None
-            if duration:
-                expires_at = timezone.now() + timezone.timedelta(minutes=duration)
-            
-            mute, created = RoomMute.objects.update_or_create(
-                user=target_user,
-                room=room,
-                defaults={
-                    'muted_by': request.user,
-                    'reason': reason,
-                    'expires_at': expires_at
-                }
-            )
-            
-            ModerationAction.objects.create(
-                moderator=request.user,
-                target_user=target_user,
-                action_type='mute',
-                reason=reason,
-                room=room,
-                duration=duration,
-                expires_at=expires_at
-            )
-            
-            # Notify user they are muted
-            Notification.objects.create(
-                recipient=target_user,
-                notification_type='moderation',
-                title='You have been muted',
-                message=f'You have been muted in {room.name}. Reason: {reason}',
-                related_room=room,
-                related_user=request.user
-            )
-            
-            # Broadcast mute status update
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f'user_{target_user.id}',
-                {
-                    'type': 'mute_status',
-                    'is_muted': True,
-                    'expires_at': expires_at.isoformat() if expires_at else None
-                }
-            )
-            
-            messages.success(request, f"{target_user.username} has been muted in {room.name}.")
-            return redirect('moderation:room_moderation', room_id=room.id)
-    else:
-        form = MuteUserForm()
+        reason = request.POST.get('reason', 'No reason provided')
+        duration = request.POST.get('duration')
+        
+        expires_at = None
+        if duration and duration.isdigit() and int(duration) > 0:
+            expires_at = timezone.now() + timezone.timedelta(minutes=int(duration))
+        
+        # Create or update mute record
+        mute, created = RoomMute.objects.update_or_create(
+            user=target_user,
+            room=room,
+            defaults={
+                'muted_by': request.user,
+                'reason': reason,
+                'expires_at': expires_at
+            }
+        )
+        
+        # Log the action
+        ModerationAction.objects.create(
+            moderator=request.user,
+            target_user=target_user,
+            action_type='mute',
+            reason=reason,
+            room=room,
+            duration=int(duration) if duration and duration.isdigit() else None,
+            expires_at=expires_at
+        )
+        
+        # Notify user they are muted
+        Notification.objects.create(
+            recipient=target_user,
+            notification_type='moderation',
+            title='You have been muted',
+            message=f'You have been muted in {room.name}. Reason: {reason}',
+            related_room=room,
+            related_user=request.user
+        )
+        
+        # Broadcast mute status update via WebSocket
+        # Send to room group - consumer will filter by user_id
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{room.slug}',
+            {
+                'type': 'mute_status',
+                'user_id': target_user.id,
+                'is_muted': True,
+                'expires_at': expires_at.isoformat() if expires_at else None
+            }
+        )
+        
+        messages.success(request, f"{target_user.username} has been muted in {room.name}.")
+        return redirect('moderation:room_moderation', room_id=room.id)
     
     return render(request, 'moderation/mute_user.html', {
-        'form': form,
         'target_user': target_user,
         'room': room,
     })
@@ -406,22 +462,26 @@ def unmute_user(request, user_id, room_id):
         return HttpResponseForbidden("You don't have permission.")
     
     if request.method == 'POST':
+        # Remove mute record
         RoomMute.objects.filter(user=target_user, room=room).delete()
         
+        # Log the action
         ModerationAction.objects.create(
             moderator=request.user,
             target_user=target_user,
             action_type='unmute',
-            reason='Mute removed',
+            reason='Mute removed by moderator',
             room=room
         )
         
-        # Broadcast unmute
+        # Broadcast unmute status via WebSocket
+        # Send to room group - consumer will filter by user_id
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
-            f'user_{target_user.id}',
+            f'chat_{room.slug}',
             {
                 'type': 'mute_status',
+                'user_id': target_user.id,
                 'is_muted': False,
                 'expires_at': None
             }
@@ -449,53 +509,53 @@ def kick_user(request, user_id, room_id):
         return redirect('moderation:room_moderation', room_id=room.id)
     
     if target_user == room.created_by:
-        messages.error(request, "You cannot kick the room creator.")
+        messages.error(request, "You cannot kick the room owner.")
         return redirect('moderation:room_moderation', room_id=room.id)
     
     if request.method == 'POST':
-        form = KickUserForm(request.POST)
-        if form.is_valid():
-            reason = form.cleaned_data['reason']
-            
-            RoomMembership.objects.filter(user=target_user, room=room).delete()
-            RoomMute.objects.filter(user=target_user, room=room).delete()
-            
-            ModerationAction.objects.create(
-                moderator=request.user,
-                target_user=target_user,
-                action_type='kick',
-                reason=reason,
-                room=room
-            )
-            
-            # Notify user they were kicked
-            Notification.objects.create(
-                recipient=target_user,
-                notification_type='moderation',
-                title='You have been kicked',
-                message=f'You have been kicked from {room.name}. Reason: {reason}',
-                related_room=room,
-                related_user=request.user
-            )
-            
-            # Broadcast kick to force disconnect
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f'chat_{room.slug}',
-                {
-                    'type': 'force_disconnect',
-                    'user_id': target_user.id,
-                    'reason': f'You have been kicked from {room.name}'
-                }
-            )
-            
-            messages.success(request, f"{target_user.username} has been kicked from {room.name}.")
-            return redirect('moderation:room_moderation', room_id=room.id)
-    else:
-        form = KickUserForm()
+        reason = request.POST.get('reason', 'No reason provided')
+        
+        # Remove from room
+        RoomMembership.objects.filter(user=target_user, room=room).delete()
+        
+        # Also remove any mutes
+        RoomMute.objects.filter(user=target_user, room=room).delete()
+        
+        # Log the action
+        ModerationAction.objects.create(
+            moderator=request.user,
+            target_user=target_user,
+            action_type='kick',
+            reason=reason,
+            room=room
+        )
+        
+        # Notify user they were kicked
+        Notification.objects.create(
+            recipient=target_user,
+            notification_type='moderation',
+            title='You have been kicked',
+            message=f'You have been kicked from {room.name}. Reason: {reason}',
+            related_room=room,
+            related_user=request.user
+        )
+        
+        # Broadcast kick via WebSocket - force disconnect
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{room.slug}',
+            {
+                'type': 'force_disconnect',
+                'user_id': target_user.id,
+                'action': 'kick',
+                'reason': f'You have been kicked from {room.name}. Reason: {reason}'
+            }
+        )
+        
+        messages.success(request, f"{target_user.username} has been kicked from {room.name}.")
+        return redirect('moderation:room_moderation', room_id=room.id)
     
     return render(request, 'moderation/kick_user.html', {
-        'form': form,
         'target_user': target_user,
         'room': room,
     })
@@ -514,46 +574,43 @@ def warn_user(request, user_id, room_id=None):
             return HttpResponseForbidden("Only administrators can issue global warnings.")
     
     if request.method == 'POST':
-        form = WarnUserForm(request.POST)
-        if form.is_valid():
-            reason = form.cleaned_data['reason']
-            
-            Warning.objects.create(
-                user=target_user,
-                issued_by=request.user,
-                room=room,
-                reason=reason
-            )
-            
-            ModerationAction.objects.create(
-                moderator=request.user,
-                target_user=target_user,
-                action_type='warn',
-                reason=reason,
-                room=room
-            )
-            
-            # Create notification for the warned user
-            scope = f"in {room.name}" if room else ""
-            Notification.objects.create(
-                recipient=target_user,
-                notification_type='warning',
-                title='You have received a warning',
-                message=f'Warning from {request.user.username}{scope}: {reason}',
-                related_room=room,
-                related_user=request.user
-            )
-            
-            messages.success(request, f"Warning issued to {target_user.username}.")
-            
-            if room:
-                return redirect('moderation:room_moderation', room_id=room.id)
-            return redirect('moderation:dashboard')
-    else:
-        form = WarnUserForm()
+        reason = request.POST.get('reason', 'No reason provided')
+        
+        # Create warning record
+        Warning.objects.create(
+            user=target_user,
+            issued_by=request.user,
+            room=room,
+            reason=reason
+        )
+        
+        # Log the action
+        ModerationAction.objects.create(
+            moderator=request.user,
+            target_user=target_user,
+            action_type='warn',
+            reason=reason,
+            room=room
+        )
+        
+        # Create notification for the warned user
+        scope = f" in {room.name}" if room else ""
+        Notification.objects.create(
+            recipient=target_user,
+            notification_type='warning',
+            title='You have received a warning',
+            message=f'Warning from {request.user.username}{scope}: {reason}',
+            related_room=room,
+            related_user=request.user
+        )
+        
+        messages.success(request, f"Warning issued to {target_user.username}.")
+        
+        if room:
+            return redirect('moderation:room_moderation', room_id=room.id)
+        return redirect('moderation:dashboard')
     
     return render(request, 'moderation/warn_user.html', {
-        'form': form,
         'target_user': target_user,
         'room': room,
     })
@@ -567,20 +624,22 @@ def delete_message(request, message_id):
         return HttpResponseForbidden("You don't have permission.")
     
     if request.method == 'POST':
+        # Soft delete
         message.is_deleted = True
         message.deleted_by = request.user
         message.deleted_at = timezone.now()
         message.save()
         
+        # Log the action
         ModerationAction.objects.create(
             moderator=request.user,
             target_user=message.sender,
             action_type='delete',
-            reason=f'Message deleted: "{message.content[:50]}..."',
+            reason=f'Message deleted: "{message.content[:50]}..."' if message.content else 'Image message deleted',
             room=message.room
         )
         
-        # Broadcast message deletion
+        # Broadcast message deletion via WebSocket
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f'chat_{message.room.slug}',
@@ -603,25 +662,47 @@ def room_moderation(request, room_id):
     if not can_moderate_room(request.user, room):
         return HttpResponseForbidden("You don't have permission to moderate this room.")
     
-    # Get members with fresh profile data - use annotate to check online status
-    members = room.members.all().select_related('profile')
+    # Get members with profile data
+    members = room.members.all().select_related('profile').order_by('username')
     
+    # Get muted users (active mutes only)
     muted_users = RoomMute.objects.filter(room=room).filter(
         Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
-    )
+    ).select_related('user', 'muted_by')
     
-    recent_reports = Report.objects.filter(room=room).order_by('-created_at')[:10]
-    recent_actions = ModerationAction.objects.filter(room=room).order_by('-created_at')[:10]
+    # Get banned users (room-specific active bans)
+    banned_users = ModerationAction.objects.filter(
+        room=room,
+        action_type='ban',
+        is_active=True
+    ).filter(
+        Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
+    ).select_related('target_user', 'moderator').order_by('-created_at')
+    
+    # Get recent reports for this room
+    recent_reports = Report.objects.filter(room=room).select_related(
+        'reported_by', 'reported_user', 'message'
+    ).order_by('-created_at')[:10]
+    
+    # Get recent moderation actions for this room
+    recent_actions = ModerationAction.objects.filter(room=room).select_related(
+        'moderator', 'target_user'
+    ).order_by('-created_at')[:10]
     
     context = {
         'room': room,
         'members': members,
         'muted_users': muted_users,
+        'banned_users': banned_users,
         'recent_reports': recent_reports,
         'recent_actions': recent_actions,
     }
     return render(request, 'moderation/room_moderation.html', context)
 
+
+# =============================================================================
+# Admin Views
+# =============================================================================
 
 @login_required
 @user_passes_test(is_staff_or_admin)
@@ -634,6 +715,8 @@ def admin_user_list(request):
             Q(username__icontains=search) |
             Q(email__icontains=search)
         )
+    
+    users = users.order_by('-date_joined')
     
     paginator = Paginator(users, 25)
     page = request.GET.get('page')
@@ -656,8 +739,11 @@ def admin_user_edit(request, user_id):
         if form.is_valid():
             form.save()
             
+            # Update profile flags
             is_disabled = request.POST.get('is_disabled') == 'on'
+            is_banned = request.POST.get('is_banned') == 'on'
             profile.is_disabled = is_disabled
+            profile.is_banned = is_banned
             profile.save()
             
             messages.success(request, f"User {target_user.username} updated.")
@@ -700,12 +786,19 @@ def admin_user_delete(request, user_id):
 @user_passes_test(is_staff_or_admin)
 def moderation_logs(request):
     action_type = request.GET.get('type', 'all')
+    room_filter = request.GET.get('room')
+    
     actions = ModerationAction.objects.all().select_related(
         'moderator', 'target_user', 'room'
     )
     
     if action_type != 'all':
         actions = actions.filter(action_type=action_type)
+    
+    if room_filter:
+        actions = actions.filter(room_id=room_filter)
+    
+    actions = actions.order_by('-created_at')
     
     paginator = Paginator(actions, 50)
     page = request.GET.get('page')
@@ -714,15 +807,19 @@ def moderation_logs(request):
     return render(request, 'moderation/logs.html', {
         'actions': actions,
         'action_type': action_type,
-        'action_types': ModerationAction.ACTION_TYPES,
+        'action_types': ModerationAction.ACTION_TYPES if hasattr(ModerationAction, 'ACTION_TYPES') else [],
     })
 
 
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
 def get_moderable_rooms(user):
+    """Get all rooms that a user can moderate"""
     if user.is_staff or user.is_superuser:
         return Room.objects.all()
     
-    created_rooms = Room.objects.filter(created_by=user)
     admin_memberships = RoomMembership.objects.filter(
         user=user,
         role__in=['admin', 'moderator']
@@ -733,15 +830,44 @@ def get_moderable_rooms(user):
     ).distinct()
 
 
+# =============================================================================
+# API Endpoints
+# =============================================================================
+
 @login_required
 def check_user_muted(request, user_id, room_id):
+    """API endpoint to check if a user is muted"""
     user = get_object_or_404(User, id=user_id)
     room = get_object_or_404(Room, id=room_id)
     
-    mute = RoomMute.objects.filter(user=user, room=room).first()
-    is_muted = mute and mute.is_active if mute else False
+    mute = RoomMute.objects.filter(user=user, room=room).filter(
+        Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
+    ).first()
     
     return JsonResponse({
-        'is_muted': is_muted,
-        'expires_at': mute.expires_at.isoformat() if mute and mute.expires_at else None
+        'is_muted': mute is not None,
+        'expires_at': mute.expires_at.isoformat() if mute and mute.expires_at else None,
+        'reason': mute.reason if mute else None
+    })
+
+
+@login_required
+def check_user_banned(request, user_id, room_id):
+    """API endpoint to check if a user is banned from a room"""
+    user = get_object_or_404(User, id=user_id)
+    room = get_object_or_404(Room, id=room_id)
+    
+    ban = ModerationAction.objects.filter(
+        target_user=user,
+        room=room,
+        action_type='ban',
+        is_active=True
+    ).filter(
+        Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
+    ).first()
+    
+    return JsonResponse({
+        'is_banned': ban is not None,
+        'expires_at': ban.expires_at.isoformat() if ban and ban.expires_at else None,
+        'reason': ban.reason if ban else None
     })

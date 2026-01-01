@@ -2,205 +2,551 @@
 
 {% block title %}Moderate {{ room.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+        padding: 24px;
+        border-radius: 16px;
+        margin-bottom: 24px;
+        color: white;
+    }
+    
+    .page-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .stats-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .stats-card .number {
+        font-size: 2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stats-card .label {
+        color: #6b7280;
+        font-size: 0.9rem;
+    }
+    
+    .mod-card {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        background: white;
+    }
+    
+    .mod-card-header {
+        padding: 16px 20px;
+        font-weight: 600;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .mod-card-header.bg-primary { background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important; }
+    .mod-card-header.bg-warning { background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%) !important; color: #1f2937 !important; }
+    .mod-card-header.bg-danger { background: linear-gradient(135deg, #ef4444 0%, #f87171 100%) !important; }
+    .mod-card-header.bg-info { background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%) !important; }
+    .mod-card-header.bg-dark { background: linear-gradient(135deg, #1f2937 0%, #374151 100%) !important; }
+    
+    .member-row {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        transition: background 0.2s;
+    }
+    
+    .member-row:hover {
+        background: #f9fafb;
+    }
+    
+    .member-row:last-child {
+        border-bottom: none;
+    }
+    
+    .member-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+    
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+    
+    .status-dot.online { background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+    .status-dot.offline { background: #9ca3af; }
+    
+    .action-btn-group {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+    
+    .action-btn-group .btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    
+    .action-btn-group .btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    .muted-item, .banned-item, .report-item, .action-item {
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    
+    .muted-item:last-child, .banned-item:last-child, .report-item:last-child, .action-item:last-child {
+        border-bottom: none;
+    }
+    
+    .badge-action {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 32px 16px;
+        color: #9ca3af;
+    }
+    
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 12px;
+        display: block;
+    }
+    
+    /* Modal improvements */
+    .modal-content {
+        border: none;
+        border-radius: 16px;
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 20px 24px;
+    }
+    
+    .modal-body {
+        padding: 24px;
+    }
+    
+    .modal-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 16px 24px;
+    }
+    
+    .scrollable-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .report-item:hover, .action-item:hover {
+        background: #f9fafb;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-            <i class="bi bi-shield-check"></i> Moderate: {{ room.name }}
-            {% if room.room_type == 'private' %}
-            <span class="badge bg-secondary"><i class="bi bi-lock"></i> Private</span>
-            {% endif %}
-        </h2>
-        <div>
-            <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-primary">
-                <i class="bi bi-chat"></i> Go to Room
-            </a>
-            <a href="{% url 'moderation:dashboard' %}" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Back
-            </a>
+<div class="container-fluid px-4">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <h2>
+                    <i class="bi bi-shield-check me-2"></i>
+                    {{ room.name }}
+                    {% if room.room_type == 'private' %}
+                    <span class="badge bg-light text-dark ms-2" style="font-size: 0.5em;">
+                        <i class="bi bi-lock-fill"></i> Private
+                    </span>
+                    {% endif %}
+                </h2>
+                <small class="opacity-75">Room Moderation Panel</small>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-light">
+                    <i class="bi bi-chat-fill me-1"></i> Go to Room
+                </a>
+                <a href="{% url 'moderation:dashboard' %}" class="btn btn-outline-light">
+                    <i class="bi bi-arrow-left me-1"></i> Dashboard
+                </a>
+            </div>
         </div>
     </div>
     
-    <div class="row">
-        <!-- Members List -->
-        <div class="col-md-6">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-people"></i> Members ({{ members.count }})</h5>
+    <!-- Stats Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="number">{{ members.count }}</div>
+                <div class="label"><i class="bi bi-people me-1"></i>Members</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="number">{{ muted_users.count }}</div>
+                <div class="label"><i class="bi bi-mic-mute me-1"></i>Muted</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="number">{{ banned_users.count }}</div>
+                <div class="label"><i class="bi bi-slash-circle me-1"></i>Banned</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="number">{{ recent_reports.count }}</div>
+                <div class="label"><i class="bi bi-flag me-1"></i>Reports</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <!-- Members Column -->
+        <div class="col-lg-6">
+            <div class="mod-card mb-4">
+                <div class="mod-card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-people-fill me-2"></i>Members</span>
+                    <span class="badge bg-light text-primary">{{ members.count }}</span>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>User</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for member in members %}
-                                <tr>
-                                    <td>
-                                        {{ member.username }}
-                                        {% if member == room.created_by %}
-                                        <span class="badge bg-warning text-dark">Creator</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge {% if member.profile.online_status == 'online' %}bg-success{% else %}bg-secondary{% endif %}">
-                                            {{ member.profile.online_status }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% if member != room.created_by and member != request.user %}
-                                        <div class="btn-group btn-group-sm">
-                                            <a href="{% url 'moderation:warn_user_room' member.id room.id %}" class="btn btn-outline-info" title="Warn">
-                                                <i class="bi bi-exclamation-triangle"></i>
-                                            </a>
-                                            <a href="{% url 'moderation:mute_user' member.id room.id %}" class="btn btn-outline-warning" title="Mute">
-                                                <i class="bi bi-mic-mute"></i>
-                                            </a>
-                                            <a href="{% url 'moderation:kick_user' member.id room.id %}" class="btn btn-outline-secondary" title="Kick">
-                                                <i class="bi bi-door-open"></i>
-                                            </a>
-                                            <a href="{% url 'moderation:ban_user_room' member.id room.id %}" class="btn btn-outline-danger" title="Ban">
-                                                <i class="bi bi-slash-circle"></i>
-                                            </a>
-                                        </div>
-                                        {% else %}
-                                        <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="3" class="text-center text-muted">No members</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <div class="scrollable-list" style="max-height: 400px;">
+                    {% for member in members %}
+                    <div class="member-row">
+                        <div class="member-avatar">{{ member.username|slice:":1"|upper }}</div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center">
+                                <span class="status-dot {% if member.profile.online_status == 'online' %}online{% else %}offline{% endif %}"></span>
+                                <strong>{{ member.username }}</strong>
+                                {% if member == room.created_by %}
+                                <span class="badge bg-warning text-dark ms-2" style="font-size: 0.65rem;">OWNER</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if member != room.created_by and member != request.user %}
+                        <div class="action-btn-group">
+                            <button class="btn btn-outline-info btn-sm" title="Warn" 
+                                    onclick="openActionModal('warn', {{ member.id }}, '{{ member.username }}')">
+                                <i class="bi bi-exclamation-triangle"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" title="Mute"
+                                    onclick="openActionModal('mute', {{ member.id }}, '{{ member.username }}')">
+                                <i class="bi bi-mic-mute"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" title="Kick"
+                                    onclick="openActionModal('kick', {{ member.id }}, '{{ member.username }}')">
+                                <i class="bi bi-door-open"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" title="Ban"
+                                    onclick="openActionModal('ban', {{ member.id }}, '{{ member.username }}')">
+                                <i class="bi bi-slash-circle"></i>
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="bi bi-people"></i>
+                        <p>No members</p>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
         
-        <!-- Muted Users & Reports -->
-        <div class="col-md-6">
+        <!-- Muted & Banned Column -->
+        <div class="col-lg-6">
             <!-- Muted Users -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><i class="bi bi-mic-mute"></i> Muted Users</h5>
+            <div class="mod-card mb-4">
+                <div class="mod-card-header bg-warning d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-mic-mute-fill me-2"></i>Muted Users</span>
+                    <span class="badge bg-dark">{{ muted_users.count }}</span>
                 </div>
-                <div class="card-body p-0">
-                    {% if muted_users %}
-                    <div class="list-group list-group-flush">
-                        {% for mute in muted_users %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>{{ mute.user.username }}</strong>
-                                <br>
-                                <small class="text-muted">
-                                    {% if mute.expires_at %}
-                                    Expires: {{ mute.expires_at|date:"M d, H:i" }}
-                                    {% else %}
-                                    Permanent
-                                    {% endif %}
-                                </small>
-                            </div>
-                            <a href="{% url 'moderation:unmute_user' mute.user.id room.id %}" class="btn btn-sm btn-success">
-                                <i class="bi bi-mic"></i> Unmute
-                            </a>
+                <div class="scrollable-list" style="max-height: 200px;">
+                    {% for mute in muted_users %}
+                    <div class="muted-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ mute.user.username }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% if mute.expires_at %}
+                                <i class="bi bi-clock me-1"></i>Expires: {{ mute.expires_at|date:"M d, H:i" }}
+                                {% else %}
+                                <i class="bi bi-infinity me-1"></i>Permanent
+                                {% endif %}
+                            </small>
                         </div>
-                        {% endfor %}
+                        <form method="post" action="{% url 'moderation:unmute_user' mute.user.id room.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="bi bi-mic me-1"></i> Unmute
+                            </button>
+                        </form>
                     </div>
-                    {% else %}
-                    <div class="text-center py-3 text-muted">
-                        No muted users
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="bi bi-mic"></i>
+                        <p>No muted users</p>
                     </div>
-                    {% endif %}
+                    {% endfor %}
                 </div>
             </div>
             
-            <!-- Recent Reports -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i class="bi bi-flag"></i> Recent Reports</h5>
+            <!-- Banned Users -->
+            <div class="mod-card mb-4">
+                <div class="mod-card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-slash-circle-fill me-2"></i>Banned Users</span>
+                    <span class="badge bg-light text-danger">{{ banned_users.count }}</span>
                 </div>
-                <div class="card-body p-0">
-                    {% if recent_reports %}
-                    <div class="list-group list-group-flush">
-                        {% for report in recent_reports %}
-                        <a href="{% url 'moderation:review_report' report.id %}" class="list-group-item list-group-item-action">
-                            <div class="d-flex justify-content-between">
-                                <strong>{{ report.reported_by.username }}</strong>
-                                <span class="badge {% if report.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
-                                    {{ report.status }}
-                                </span>
-                            </div>
-                            <small class="text-muted">{{ report.created_at|timesince }} ago</small>
-                        </a>
-                        {% endfor %}
+                <div class="scrollable-list" style="max-height: 200px;">
+                    {% for ban in banned_users %}
+                    <div class="banned-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ ban.target_user.username }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% if ban.expires_at %}
+                                <i class="bi bi-clock me-1"></i>Expires: {{ ban.expires_at|date:"M d, H:i" }}
+                                {% else %}
+                                <i class="bi bi-infinity me-1"></i>Permanent
+                                {% endif %}
+                                <br>
+                                <i class="bi bi-chat-quote me-1"></i>{{ ban.reason|truncatewords:10 }}
+                            </small>
+                        </div>
+                        <form method="post" action="{% url 'moderation:unban_user_room' ban.target_user.id room.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="bi bi-check-circle me-1"></i> Unban
+                            </button>
+                        </form>
                     </div>
-                    {% else %}
-                    <div class="text-center py-3 text-muted">
-                        No reports
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="bi bi-person-check"></i>
+                        <p>No banned users</p>
                     </div>
-                    {% endif %}
+                    {% endfor %}
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Recent Actions -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Moderation Actions</h5>
+    <!-- Reports and Actions Row -->
+    <div class="row g-4">
+        <!-- Recent Reports -->
+        <div class="col-lg-6">
+            <div class="mod-card">
+                <div class="mod-card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-flag-fill me-2"></i>Recent Reports</span>
+                    <a href="{% url 'moderation:reports_list' %}?room={{ room.id }}" class="btn btn-sm btn-outline-light">View All</a>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Action</th>
-                                    <th>Target</th>
-                                    <th>Moderator</th>
-                                    <th>Reason</th>
-                                    <th>Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for action in recent_actions %}
-                                <tr>
-                                    <td>
-                                        <span class="badge 
-                                            {% if action.action_type == 'ban' %}bg-danger
-                                            {% elif action.action_type == 'mute' %}bg-warning text-dark
-                                            {% elif action.action_type == 'warn' %}bg-info
-                                            {% elif action.action_type == 'kick' %}bg-secondary
-                                            {% elif action.action_type == 'delete' %}bg-dark
-                                            {% else %}bg-success{% endif %}">
-                                            {{ action.action_type|upper }}
-                                        </span>
-                                    </td>
-                                    <td>{{ action.target_user.username }}</td>
-                                    <td>{{ action.moderator.username }}</td>
-                                    <td><small>{{ action.reason|truncatewords:10 }}</small></td>
-                                    <td><small>{{ action.created_at|timesince }} ago</small></td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted">No actions yet</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <div class="scrollable-list">
+                    {% for report in recent_reports %}
+                    <a href="{% url 'moderation:review_report' report.id %}" class="report-item d-block text-decoration-none text-dark">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>{{ report.reported_by.username }}</strong>
+                                <span class="badge badge-action {% if report.status == 'pending' %}bg-warning text-dark{% elif report.status == 'resolved' %}bg-success{% else %}bg-secondary{% endif %} ms-2">
+                                    {{ report.status|upper }}
+                                </span>
+                                <br>
+                                <small class="text-muted">{{ report.reason|truncatewords:10 }}</small>
+                            </div>
+                            <small class="text-muted">{{ report.created_at|timesince }} ago</small>
+                        </div>
+                    </a>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="bi bi-flag"></i>
+                        <p>No reports</p>
                     </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Actions -->
+        <div class="col-lg-6">
+            <div class="mod-card">
+                <div class="mod-card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history me-2"></i>Recent Actions</span>
+                    <a href="{% url 'moderation:logs' %}?room={{ room.id }}" class="btn btn-sm btn-outline-light">View All</a>
+                </div>
+                <div class="scrollable-list">
+                    {% for action in recent_actions %}
+                    <div class="action-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge badge-action 
+                                    {% if action.action_type == 'ban' %}bg-danger
+                                    {% elif action.action_type == 'mute' %}bg-warning text-dark
+                                    {% elif action.action_type == 'warn' %}bg-info
+                                    {% elif action.action_type == 'kick' %}bg-secondary
+                                    {% elif action.action_type == 'delete' %}bg-dark
+                                    {% else %}bg-success{% endif %}">
+                                    {{ action.action_type|upper }}
+                                </span>
+                                <strong class="ms-2">{{ action.target_user.username }}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    by {{ action.moderator.username }} • {{ action.reason|truncatewords:8 }}
+                                </small>
+                            </div>
+                            <small class="text-muted">{{ action.created_at|timesince }} ago</small>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="bi bi-clock-history"></i>
+                        <p>No actions yet</p>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Action Modal -->
+<div class="modal fade" id="actionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionModalTitle">
+                    <i class="bi bi-shield-exclamation me-2"></i>
+                    <span id="actionModalTitleText">Action</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="actionForm" method="post">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-secondary mb-3" id="actionModalAlert">
+                        You are about to take action against <strong id="targetUsername"></strong>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="actionReason" class="form-label">Reason</label>
+                        <textarea class="form-control" id="actionReason" name="reason" rows="3" required 
+                                  placeholder="Provide a reason for this action..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3" id="durationField" style="display: none;">
+                        <label for="actionDuration" class="form-label">Duration (minutes)</label>
+                        <input type="number" class="form-control" id="actionDuration" name="duration" min="1"
+                               placeholder="Leave empty for permanent">
+                        <small class="form-text text-muted">Examples: 30 = 30 min, 60 = 1 hour, 1440 = 1 day</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" id="actionSubmitBtn">Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const roomId = {{ room.id }};
+let actionModal;
+
+document.addEventListener('DOMContentLoaded', function() {
+    actionModal = new bootstrap.Modal(document.getElementById('actionModal'));
+});
+
+function openActionModal(action, userId, username) {
+    const form = document.getElementById('actionForm');
+    const title = document.getElementById('actionModalTitleText');
+    const alertEl = document.getElementById('actionModalAlert');
+    const targetUsername = document.getElementById('targetUsername');
+    const durationField = document.getElementById('durationField');
+    const submitBtn = document.getElementById('actionSubmitBtn');
+    const reasonField = document.getElementById('actionReason');
+    
+    targetUsername.textContent = username;
+    reasonField.value = '';
+    document.getElementById('actionDuration').value = '';
+    
+    // Configure based on action type
+    switch(action) {
+        case 'warn':
+            title.textContent = 'Warn User';
+            alertEl.className = 'alert alert-info mb-3';
+            submitBtn.className = 'btn btn-info';
+            submitBtn.textContent = 'Issue Warning';
+            durationField.style.display = 'none';
+            form.action = `/moderation/warn/${userId}/room/${roomId}/`;
+            break;
+        case 'mute':
+            title.textContent = 'Mute User';
+            alertEl.className = 'alert alert-warning mb-3';
+            submitBtn.className = 'btn btn-warning';
+            submitBtn.textContent = 'Mute User';
+            durationField.style.display = 'block';
+            form.action = `/moderation/mute/${userId}/room/${roomId}/`;
+            break;
+        case 'kick':
+            title.textContent = 'Kick User';
+            alertEl.className = 'alert alert-secondary mb-3';
+            submitBtn.className = 'btn btn-secondary';
+            submitBtn.textContent = 'Kick User';
+            durationField.style.display = 'none';
+            form.action = `/moderation/kick/${userId}/room/${roomId}/`;
+            break;
+        case 'ban':
+            title.textContent = 'Ban User';
+            alertEl.className = 'alert alert-danger mb-3';
+            submitBtn.className = 'btn btn-danger';
+            submitBtn.textContent = 'Ban User';
+            durationField.style.display = 'block';
+            form.action = `/moderation/ban/${userId}/room/${roomId}/`;
+            break;
+    }
+    
+    actionModal.show();
+}
+</script>
 {% endblock %}

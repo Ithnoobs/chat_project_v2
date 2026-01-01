@@ -2,58 +2,241 @@
 
 {% block title %}Invite Users - {{ room.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .user-search-container {
+        position: relative;
+    }
+    
+    .user-list-container {
+        max-height: 450px;
+        overflow-y: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+    }
+    
+    .user-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        transition: background 0.2s;
+        cursor: pointer;
+    }
+    
+    .user-item:hover {
+        background: #f9fafb;
+    }
+    
+    .user-item:last-child {
+        border-bottom: none;
+    }
+    
+    .user-item.selected {
+        background: #eff6ff;
+        border-left: 3px solid #3b82f6;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 12px;
+    }
+    
+    .user-avatar-placeholder {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        color: white;
+        font-weight: 600;
+    }
+    
+    .user-info {
+        flex-grow: 1;
+    }
+    
+    .user-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+    
+    .user-status {
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+    
+    .search-input {
+        border-radius: 25px;
+        padding: 12px 20px;
+        padding-left: 45px;
+        border: 2px solid #e5e7eb;
+        transition: all 0.2s;
+    }
+    
+    .search-input:focus {
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+    
+    .search-icon {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #9ca3af;
+    }
+    
+    .selected-count {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 25px;
+        font-weight: 600;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 40px 20px;
+        color: #9ca3af;
+    }
+    
+    .no-results i {
+        font-size: 3rem;
+        margin-bottom: 16px;
+        display: block;
+    }
+    
+    .select-all-btn {
+        font-size: 0.85rem;
+        color: #4f46e5;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .select-all-btn:hover {
+        text-decoration: underline;
+    }
+    
+    .check-indicator {
+        margin-left: auto;
+    }
+    
+    .page-header {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        padding: 24px;
+        border-radius: 16px 16px 0 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0"><i class="bi bi-person-plus"></i> Invite Users to {{ room.name }}</h4>
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+                <div class="page-header text-white">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-person-plus-fill me-3 fs-4"></i>
+                        <div>
+                            <h5 class="mb-0 fw-bold">Invite Users</h5>
+                            <small class="opacity-75">{{ room.name }}</small>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     {% if available_users %}
-                    <form method="post">
+                    <form method="post" id="invite-form">
                         {% csrf_token %}
                         
-                        <div class="mb-3">
-                            <label class="form-label">Select users to invite:</label>
-                            <div class="border rounded p-3" style="max-height: 400px; overflow-y: auto;">
-                                {% for user in available_users %}
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" name="user_ids" value="{{ user.id }}" id="user_{{ user.id }}">
-                                    <label class="form-check-label d-flex align-items-center" for="user_{{ user.id }}">
-                                        {% if user.profile.avatar %}
-                                        <img src="{{ user.profile.avatar.url }}" alt="" class="rounded-circle me-2" style="width: 30px; height: 30px; object-fit: cover;">
-                                        {% else %}
-                                        <span class="bg-secondary rounded-circle d-inline-flex align-items-center justify-content-center me-2" style="width: 30px; height: 30px;">
-                                            <i class="bi bi-person text-white"></i>
-                                        </span>
-                                        {% endif %}
-                                        <span>{{ user.username }}</span>
-                                        {% if user.profile.online_status == 'online' %}
-                                        <span class="badge bg-success ms-2">Online</span>
-                                        {% endif %}
-                                    </label>
-                                </div>
-                                {% endfor %}
+                        <!-- Search Box -->
+                        <div class="user-search-container mb-4">
+                            <i class="bi bi-search search-icon"></i>
+                            <input type="text" 
+                                   id="user-search" 
+                                   class="form-control search-input" 
+                                   placeholder="Search users by username..."
+                                   autocomplete="off">
+                        </div>
+                        
+                        <!-- Selection Info -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="selected-count" id="selected-count">0 selected</span>
+                            </div>
+                            <div>
+                                <a href="#" class="select-all-btn" id="select-all">Select All</a>
+                                <span class="text-muted mx-2">|</span>
+                                <a href="#" class="select-all-btn" id="deselect-all">Clear</a>
                             </div>
                         </div>
                         
+                        <!-- User List -->
+                        <div class="user-list-container mb-4" id="user-list">
+                            {% for user in available_users %}
+                            <label class="user-item" for="user_{{ user.id }}" data-username="{{ user.username|lower }}">
+                                <input class="form-check-input me-3 user-checkbox" 
+                                       type="checkbox" 
+                                       name="user_ids" 
+                                       value="{{ user.id }}" 
+                                       id="user_{{ user.id }}"
+                                       style="display: none;">
+                                
+                                {% if user.profile.avatar %}
+                                <img src="{{ user.profile.avatar.url }}" alt="" class="user-avatar">
+                                {% else %}
+                                <div class="user-avatar-placeholder">
+                                    {{ user.username|slice:":1"|upper }}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="user-info">
+                                    <div class="user-name">{{ user.username }}</div>
+                                    <div class="user-status">
+                                        {% if user.profile.online_status == 'online' %}
+                                        <span class="text-success"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Online</span>
+                                        {% else %}
+                                        <span class="text-muted"><i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Offline</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                <div class="check-indicator">
+                                    <i class="bi bi-check-circle-fill text-primary fs-5 check-icon" style="display: none;"></i>
+                                    <i class="bi bi-circle text-muted fs-5 empty-icon"></i>
+                                </div>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- No Results Message -->
+                        <div class="no-results" id="no-results" style="display: none;">
+                            <i class="bi bi-search"></i>
+                            <p class="mb-0">No users found matching your search</p>
+                        </div>
+                        
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-send"></i> Send Invitations
+                            <button type="submit" class="btn btn-primary flex-grow-1" id="invite-btn" disabled>
+                                <i class="bi bi-send-fill me-2"></i> Send Invitations
                             </button>
-                            <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-secondary">
+                            <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-outline-secondary">
                                 Cancel
                             </a>
                         </div>
                     </form>
                     {% else %}
-                    <div class="text-center py-4 text-muted">
-                        <i class="bi bi-people" style="font-size: 3rem;"></i>
-                        <p class="mt-3">All users have already been invited to this room.</p>
-                        <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-secondary">
-                            Back to Room
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-people-fill" style="font-size: 4rem;"></i>
+                        <h5 class="mt-3">No Users Available</h5>
+                        <p class="mb-4">All users have already been invited to this room.</p>
+                        <a href="{% url 'chat:room_detail' room.slug %}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left me-2"></i> Back to Room
                         </a>
                     </div>
                     {% endif %}
@@ -62,4 +245,117 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('user-search');
+    const userList = document.getElementById('user-list');
+    const noResults = document.getElementById('no-results');
+    const selectedCountEl = document.getElementById('selected-count');
+    const inviteBtn = document.getElementById('invite-btn');
+    const selectAllBtn = document.getElementById('select-all');
+    const deselectAllBtn = document.getElementById('deselect-all');
+    
+    if (!searchInput || !userList) return;
+    
+    const userItems = userList.querySelectorAll('.user-item');
+    
+    // Search functionality
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        let visibleCount = 0;
+        
+        userItems.forEach(item => {
+            const username = item.dataset.username;
+            if (username.includes(searchTerm)) {
+                item.style.display = 'flex';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // Show/hide no results message
+        if (visibleCount === 0 && searchTerm !== '') {
+            noResults.style.display = 'block';
+            userList.style.display = 'none';
+        } else {
+            noResults.style.display = 'none';
+            userList.style.display = 'block';
+        }
+    });
+    
+    // Update selection count and button state
+    function updateSelectionState() {
+        const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+        const count = checkboxes.length;
+        
+        selectedCountEl.textContent = count + ' selected';
+        inviteBtn.disabled = count === 0;
+        
+        // Update visual indicators
+        userItems.forEach(item => {
+            const checkbox = item.querySelector('.user-checkbox');
+            const checkIcon = item.querySelector('.check-icon');
+            const emptyIcon = item.querySelector('.empty-icon');
+            
+            if (checkbox.checked) {
+                item.classList.add('selected');
+                if (checkIcon) checkIcon.style.display = 'inline';
+                if (emptyIcon) emptyIcon.style.display = 'none';
+            } else {
+                item.classList.remove('selected');
+                if (checkIcon) checkIcon.style.display = 'none';
+                if (emptyIcon) emptyIcon.style.display = 'inline';
+            }
+        });
+    }
+    
+    // Click on user item
+    userItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            if (e.target.tagName !== 'INPUT') {
+                const checkbox = this.querySelector('.user-checkbox');
+                checkbox.checked = !checkbox.checked;
+                updateSelectionState();
+            }
+        });
+    });
+    
+    // Checkbox change
+    document.querySelectorAll('.user-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectionState);
+    });
+    
+    // Select all visible
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            userItems.forEach(item => {
+                if (item.style.display !== 'none') {
+                    const checkbox = item.querySelector('.user-checkbox');
+                    checkbox.checked = true;
+                }
+            });
+            updateSelectionState();
+        });
+    }
+    
+    // Deselect all
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.user-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateSelectionState();
+        });
+    }
+    
+    // Initial state
+    updateSelectionState();
+});
+</script>
 {% endblock %}

@@ -2,6 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -14,15 +15,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
         
-        # Check if user is banned
-        is_banned = await self.check_if_banned()
-        if is_banned:
+        # Check if user is banned or not a member
+        is_allowed = await self.check_room_access()
+        if not is_allowed:
             await self.close()
             return
-        
-        # Check if user is muted
-        is_muted = await self.check_if_muted()
-        self.is_muted = is_muted
         
         # Join room group
         await self.channel_layer.group_add(
@@ -30,8 +27,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         
-        # Join user-specific group for targeted messages (kick/ban)
-        self.user_group_name = f'user_{self.user.id}'
+        # Join user-specific group for targeted messages (mute, kick, ban)
+        self.user_group_name = f'user_{self.user.id}_{self.room_slug}'
         await self.channel_layer.group_add(
             self.user_group_name,
             self.channel_name
@@ -39,208 +36,313 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
         await self.accept()
         
-        # Send mute status on connect
-        if is_muted:
-            mute_info = await self.get_mute_info()
-            await self.send(text_data=json.dumps({
-                'type': 'mute_status',
-                'is_muted': True,
-                'expires_at': mute_info
-            }))
+        # Check mute status
+        self.is_muted = await self.check_mute_status()
+        
+        # Broadcast member joined
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'member_joined',
+                'user_id': self.user.id,
+                'username': self.user.username
+            }
+        )
+        
+        # Update user online status
+        await self.set_user_online(True)
     
     async def disconnect(self, close_code):
+        # Leave room group
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
+        
+        # Leave user-specific group
         if hasattr(self, 'user_group_name'):
             await self.channel_layer.group_discard(
                 self.user_group_name,
                 self.channel_name
             )
+        
+        # Broadcast member left
+        if hasattr(self, 'user') and self.user.is_authenticated:
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'member_left',
+                    'user_id': self.user.id,
+                    'username': self.user.username
+                }
+            )
+            
+            # Update user online status
+            await self.set_user_online(False)
     
     async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_type = data.get('type', 'message')
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type', 'message')
+            
+            if message_type == 'message':
+                await self.handle_message(data)
+            elif message_type == 'typing':
+                await self.handle_typing(data)
+            elif message_type == 'heartbeat':
+                await self.handle_heartbeat()
+        except json.JSONDecodeError:
+            await self.send_error('Invalid message format')
+    
+    async def handle_message(self, data):
+        message = data.get('message', '').strip()
+        image_url = data.get('image_url')
+        message_id = data.get('message_id')
         
-        if message_type == 'message':
-            message = data.get('message', '')
-            username = data.get('username', '')
-            image_url = data.get('image_url', None)
-            
-            # Refresh mute status
-            is_muted = await self.check_if_muted()
-            if is_muted:
-                await self.send(text_data=json.dumps({
-                    'type': 'error',
-                    'message': 'You are muted in this room'
-                }))
-                return
-            
-            # Check if banned
-            is_banned = await self.check_if_banned()
-            if is_banned:
-                await self.send(text_data=json.dumps({
-                    'type': 'force_disconnect',
-                    'reason': 'You are banned from this room'
-                }))
-                return
-            
-            # Save message to database
-            saved_message = await self.save_message(message)
-            
-            # Send message to room group
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'chat_message',
-                    'message': message,
-                    'username': username,
-                    'image_url': image_url,
-                    'message_id': saved_message.id if saved_message else None,
-                    'timestamp': timezone.now().isoformat()
-                }
-            )
+        # Check if user is muted
+        if await self.check_mute_status():
+            await self.send_error('You are muted in this room')
+            return
         
-        elif message_type == 'typing':
-            username = data.get('username', '')
-            is_typing = data.get('is_typing', False)
-            
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'typing_indicator',
-                    'username': username,
-                    'is_typing': is_typing
-                }
-            )
+        if not message and not image_url:
+            return
+        
+        # Save message to database if not already saved (text-only messages)
+        if not message_id and message:
+            message_id = await self.save_message(message)
+        
+        # Broadcast to room
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': message,
+                'username': self.user.username,
+                'user_id': self.user.id,
+                'image_url': image_url,
+                'message_id': message_id,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+    
+    async def handle_typing(self, data):
+        is_typing = data.get('is_typing', False)
+        
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'typing_indicator',
+                'username': self.user.username,
+                'user_id': self.user.id,
+                'is_typing': is_typing
+            }
+        )
+    
+    async def handle_heartbeat(self):
+        # Update last activity timestamp
+        await self.set_user_online(True)
+    
+    # =========================================================================
+    # Event Handlers (received from channel layer)
+    # =========================================================================
     
     async def chat_message(self, event):
+        """Handle incoming chat message"""
         await self.send(text_data=json.dumps({
             'type': 'message',
-            'message': event['message'],
-            'username': event['username'],
+            'message': event.get('message'),
+            'username': event.get('username'),
+            'user_id': event.get('user_id'),
             'image_url': event.get('image_url'),
             'message_id': event.get('message_id'),
             'timestamp': event.get('timestamp')
         }))
     
     async def typing_indicator(self, event):
+        """Handle typing indicator"""
+        # Don't send to the user who is typing
+        if event.get('user_id') == self.user.id:
+            return
+        
         await self.send(text_data=json.dumps({
             'type': 'typing',
-            'username': event['username'],
-            'is_typing': event['is_typing']
+            'username': event.get('username'),
+            'is_typing': event.get('is_typing')
         }))
     
     async def message_deleted(self, event):
+        """Handle message deletion"""
         await self.send(text_data=json.dumps({
             'type': 'message_deleted',
-            'message_id': event['message_id']
+            'message_id': event.get('message_id')
+        }))
+    
+    async def mute_status(self, event):
+        """
+        Handle mute status update.
+        Only process if this message is for the current user.
+        Updates UI without disconnecting.
+        """
+        target_user_id = event.get('user_id')
+        
+        # Only process if this message is for the current user
+        if target_user_id and target_user_id != self.user.id:
+            return
+        
+        is_muted = event.get('is_muted', False)
+        expires_at = event.get('expires_at')
+        
+        # Update local state
+        self.is_muted = is_muted
+        
+        # Send mute status to client - DO NOT close connection
+        await self.send(text_data=json.dumps({
+            'type': 'mute_status',
+            'is_muted': is_muted,
+            'expires_at': expires_at
         }))
     
     async def force_disconnect(self, event):
-        """Handle kick/ban - force user to disconnect"""
+        """
+        Handle forced disconnect (kick/ban).
+        Only process if this message is for the current user.
+        Sends alert data BEFORE closing connection.
+        """
+        target_user_id = event.get('user_id')
+        
+        # Only process if this message is for the current user
+        if target_user_id and target_user_id != self.user.id:
+            return
+        
+        action = event.get('action', 'removed')
+        reason = event.get('reason', 'You have been removed from this room.')
+        
+        # Send disconnect notice to client FIRST
         await self.send(text_data=json.dumps({
             'type': 'force_disconnect',
-            'reason': event.get('reason', 'You have been removed from this room')
+            'action': action,
+            'reason': reason
         }))
+        
+        # Then close the connection
         await self.close()
     
-    async def mute_status(self, event):
-        """Update mute status for user"""
+    async def member_joined(self, event):
+        """Handle member joining the room"""
+        # Don't notify the user who joined
+        if event.get('user_id') == self.user.id:
+            return
+        
         await self.send(text_data=json.dumps({
-            'type': 'mute_status',
-            'is_muted': event.get('is_muted', False),
-            'expires_at': event.get('expires_at')
+            'type': 'member_joined',
+            'user_id': event.get('user_id'),
+            'username': event.get('username')
         }))
     
-    @database_sync_to_async
-    def save_message(self, content):
-        from apps.chat.models import Room, Message
+    async def member_left(self, event):
+        """Handle member leaving the room"""
+        # Don't notify the user who left
+        if event.get('user_id') == self.user.id:
+            return
         
-        try:
-            room = Room.objects.get(slug=self.room_slug)
-            message = Message.objects.create(
-                room=room,
-                sender=self.user,
-                content=content
-            )
-            return message
-        except Room.DoesNotExist:
-            return None
+        await self.send(text_data=json.dumps({
+            'type': 'member_left',
+            'user_id': event.get('user_id'),
+            'username': event.get('username')
+        }))
+    
+    async def send_error(self, message):
+        """Send error message to client"""
+        await self.send(text_data=json.dumps({
+            'type': 'error',
+            'message': message
+        }))
+    
+    # =========================================================================
+    # Database Operations
+    # =========================================================================
     
     @database_sync_to_async
-    def check_if_muted(self):
-        from apps.moderation.models import RoomMute
-        from apps.chat.models import Room
-        
-        try:
-            room = Room.objects.get(slug=self.room_slug)
-            mute = RoomMute.objects.filter(user=self.user, room=room).first()
-            
-            if not mute:
-                return False
-            
-            if mute.expires_at and timezone.now() > mute.expires_at:
-                mute.delete()
-                return False
-            
-            return True
-        except Room.DoesNotExist:
-            return False
-    
-    @database_sync_to_async
-    def get_mute_info(self):
-        from apps.moderation.models import RoomMute
-        from apps.chat.models import Room
-        
-        try:
-            room = Room.objects.get(slug=self.room_slug)
-            mute = RoomMute.objects.filter(user=self.user, room=room).first()
-            if mute and mute.expires_at:
-                return mute.expires_at.isoformat()
-            return None
-        except:
-            return None
-    
-    @database_sync_to_async
-    def check_if_banned(self):
+    def check_room_access(self):
+        """Check if user can access this room (is member and not banned)"""
+        from apps.chat.models import Room, RoomMembership
         from apps.moderation.models import ModerationAction
-        from apps.chat.models import Room
-        from apps.authentication.models import UserProfile
+        from django.db.models import Q
         
-        # Check global ban
-        try:
-            profile = UserProfile.objects.get(user=self.user)
-            if profile.is_currently_banned:
-                return True
-        except UserProfile.DoesNotExist:
-            pass
-        
-        # Check room ban
         try:
             room = Room.objects.get(slug=self.room_slug)
-            ban = ModerationAction.objects.filter(
+            self.room = room
+            
+            # Check if user is a member
+            is_member = RoomMembership.objects.filter(
+                user=self.user,
+                room=room
+            ).exists()
+            
+            if not is_member:
+                return False
+            
+            # Check if user is banned from this room
+            is_banned = ModerationAction.objects.filter(
                 target_user=self.user,
                 room=room,
                 action_type='ban',
                 is_active=True
-            ).first()
+            ).filter(
+                Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
+            ).exists()
             
-            if not ban:
-                return False
+            return not is_banned
             
-            if ban.expires_at and timezone.now() > ban.expires_at:
-                ban.is_active = False
-                ban.save()
-                return False
-            
-            return True
         except Room.DoesNotExist:
             return False
+    
+    @database_sync_to_async
+    def check_mute_status(self):
+        """Check if user is muted in this room"""
+        from apps.moderation.models import RoomMute
+        from django.db.models import Q
+        
+        mute = RoomMute.objects.filter(
+            user=self.user,
+            room=self.room
+        ).filter(
+            Q(expires_at__gt=timezone.now()) | Q(expires_at__isnull=True)
+        ).first()
+        
+        return mute is not None
+    
+    @database_sync_to_async
+    def save_message(self, content):
+        """Save a text message to the database"""
+        from apps.chat.models import Message
+        
+        message = Message.objects.create(
+            room=self.room,
+            sender=self.user,
+            content=content
+        )
+        return message.id
+    
+    @database_sync_to_async
+    def set_user_online(self, is_online):
+        """Update user's online status"""
+        from apps.authentication.models import UserProfile
+        
+        try:
+            profile, _ = UserProfile.objects.get_or_create(user=self.user)
+            profile.online_status = 'online' if is_online else 'offline'
+            profile.last_seen = timezone.now()
+            profile.save(update_fields=['online_status', 'last_seen'])
+        except Exception:
+            pass
 
 
 class PresenceConsumer(AsyncWebsocketConsumer):
+    """
+    Handles user presence (online/offline status) across the application.
+    """
+    
     async def connect(self):
         self.user = self.scope['user']
         
@@ -250,97 +352,87 @@ class PresenceConsumer(AsyncWebsocketConsumer):
         
         self.presence_group = 'presence'
         
+        # Join presence group
         await self.channel_layer.group_add(
             self.presence_group,
             self.channel_name
         )
         
-        await self.update_status('online')
+        await self.accept()
         
+        # Set user online
+        await self.set_user_status('online')
+        
+        # Broadcast status change
         await self.channel_layer.group_send(
             self.presence_group,
             {
-                'type': 'user_status',
+                'type': 'status_update',
                 'user_id': self.user.id,
-                'username': self.user.username,
                 'status': 'online'
             }
         )
-        
-        await self.accept()
     
     async def disconnect(self, close_code):
         if hasattr(self, 'user') and self.user.is_authenticated:
-            await self.update_status('offline')
+            # Set user offline
+            await self.set_user_status('offline')
             
+            # Broadcast status change
             await self.channel_layer.group_send(
                 self.presence_group,
                 {
-                    'type': 'user_status',
+                    'type': 'status_update',
                     'user_id': self.user.id,
-                    'username': self.user.username,
                     'status': 'offline'
                 }
             )
-            
+        
+        # Leave presence group
+        if hasattr(self, 'presence_group'):
             await self.channel_layer.group_discard(
                 self.presence_group,
                 self.channel_name
             )
     
     async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_type = data.get('type')
-        
-        if message_type == 'heartbeat':
-            await self.update_last_seen()
-        
-        elif message_type == 'status_change':
-            new_status = data.get('status', 'online')
-            await self.update_status(new_status)
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
             
-            await self.channel_layer.group_send(
-                self.presence_group,
-                {
-                    'type': 'user_status',
-                    'user_id': self.user.id,
-                    'username': self.user.username,
-                    'status': new_status
-                }
-            )
+            if message_type == 'heartbeat':
+                # Update last activity
+                await self.set_user_status('online')
+        except json.JSONDecodeError:
+            pass
     
-    async def user_status(self, event):
+    async def status_update(self, event):
+        """Handle status update from other users"""
         await self.send(text_data=json.dumps({
             'type': 'status',
-            'user_id': event['user_id'],
-            'username': event['username'],
-            'status': event['status']
+            'user_id': event.get('user_id'),
+            'status': event.get('status')
         }))
     
     @database_sync_to_async
-    def update_status(self, status):
+    def set_user_status(self, status):
+        """Update user's online status in database"""
         from apps.authentication.models import UserProfile
         
         try:
             profile, _ = UserProfile.objects.get_or_create(user=self.user)
             profile.online_status = status
-            profile.save(update_fields=['online_status'])
-        except Exception:
-            pass
-    
-    @database_sync_to_async
-    def update_last_seen(self):
-        from apps.authentication.models import UserProfile
-        
-        try:
-            profile, _ = UserProfile.objects.get_or_create(user=self.user)
             profile.last_seen = timezone.now()
-            profile.save(update_fields=['last_seen'])
+            profile.save(update_fields=['online_status', 'last_seen'])
         except Exception:
             pass
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
+    """
+    Handles real-time notifications for users.
+    """
+    
     async def connect(self):
         self.user = self.scope['user']
         
@@ -350,18 +442,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         
         self.notification_group = f'notifications_{self.user.id}'
         
+        # Join user's notification group
         await self.channel_layer.group_add(
             self.notification_group,
             self.channel_name
         )
         
         await self.accept()
-        
-        unread_count = await self.get_unread_count()
-        await self.send(text_data=json.dumps({
-            'type': 'unread_count',
-            'count': unread_count
-        }))
     
     async def disconnect(self, close_code):
         if hasattr(self, 'notification_group'):
@@ -371,48 +458,53 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             )
     
     async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_type = data.get('type')
-        
-        if message_type == 'mark_read':
-            notification_id = data.get('notification_id')
-            await self.mark_notification_read(notification_id)
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
             
-            unread_count = await self.get_unread_count()
-            await self.send(text_data=json.dumps({
-                'type': 'unread_count',
-                'count': unread_count
-            }))
+            if message_type == 'mark_read':
+                notification_id = data.get('notification_id')
+                if notification_id:
+                    await self.mark_notification_read(notification_id)
+            elif message_type == 'mark_all_read':
+                await self.mark_all_notifications_read()
+        except json.JSONDecodeError:
+            pass
     
-    async def new_notification(self, event):
+    async def send_notification(self, event):
+        """Send notification to user"""
         await self.send(text_data=json.dumps({
             'type': 'notification',
-            'notification': event['notification']
+            'id': event.get('id'),
+            'title': event.get('title'),
+            'message': event.get('message'),
+            'notification_type': event.get('notification_type'),
+            'link': event.get('link'),
+            'created_at': event.get('created_at')
         }))
-    
-    async def unread_count_update(self, event):
-        await self.send(text_data=json.dumps({
-            'type': 'unread_count',
-            'count': event['count']
-        }))
-    
-    @database_sync_to_async
-    def get_unread_count(self):
-        from apps.notifications.models import Notification
-        return Notification.objects.filter(
-            recipient=self.user,
-            is_read=False
-        ).count()
     
     @database_sync_to_async
     def mark_notification_read(self, notification_id):
+        """Mark a specific notification as read"""
         from apps.notifications.models import Notification
         
         try:
-            notification = Notification.objects.get(
+            Notification.objects.filter(
                 id=notification_id,
                 recipient=self.user
-            )
-            notification.mark_as_read()
-        except Notification.DoesNotExist:
+            ).update(is_read=True)
+        except Exception:
+            pass
+    
+    @database_sync_to_async
+    def mark_all_notifications_read(self):
+        """Mark all notifications as read"""
+        from apps.notifications.models import Notification
+        
+        try:
+            Notification.objects.filter(
+                recipient=self.user,
+                is_read=False
+            ).update(is_read=True)
+        except Exception:
             pass

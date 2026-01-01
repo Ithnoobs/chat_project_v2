@@ -75,7 +75,7 @@ The previous implementation used `hasattr()` which always returns `True` for rel
    ```bash
    docker-compose exec web python manage.py createsuperuser
    ```
-5. Access the application at http://localhost:8000
+5. Access the application at http://localhost:8001
 
 ### Manual Setup
 

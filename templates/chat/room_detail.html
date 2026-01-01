@@ -4,27 +4,42 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --danger-gradient: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --dark-gradient: linear-gradient(135deg, #232526 0%, #414345 100%);
+    }
+
     .chat-container {
         height: calc(100vh - 200px);
         display: flex;
         flex-direction: column;
     }
-
-    .offline-indicator {
-        background-color: #6c757d !important;
+    
+    .chat-header {
+        background: var(--primary-gradient);
+        border-radius: 16px 16px 0 0;
+        padding: 20px 24px;
+    }
+    
+    .chat-header h5 {
+        font-weight: 700;
+        margin: 0;
     }
     
     .chat-messages {
         flex: 1;
         overflow-y: auto;
-        padding: 20px;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
+        padding: 24px;
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        border-left: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
     }
     
     .message-item {
-        margin-bottom: 15px;
+        margin-bottom: 16px;
         animation: slideIn 0.3s ease;
     }
     
@@ -40,40 +55,44 @@
     }
     
     .message-bubble {
-        padding: 10px 15px;
-        border-radius: 18px;
+        padding: 12px 18px;
+        border-radius: 20px;
         max-width: 70%;
         word-wrap: break-word;
         position: relative;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     
     .message-own {
-        background-color: #007bff;
+        background: var(--primary-gradient);
         color: white;
         margin-left: auto;
+        border-bottom-right-radius: 6px;
     }
     
     .message-other {
-        background-color: white;
-        border: 1px solid #dee2e6;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-bottom-left-radius: 6px;
     }
     
     .message-sender {
-        font-weight: bold;
+        font-weight: 600;
         font-size: 0.85rem;
-        margin-bottom: 3px;
+        margin-bottom: 4px;
+        color: #6366f1;
     }
     
     .message-time {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         opacity: 0.7;
-        margin-top: 3px;
+        margin-top: 6px;
     }
     
     .message-actions {
         position: absolute;
-        top: 5px;
-        right: 5px;
+        top: 8px;
+        right: 8px;
         display: none;
     }
     
@@ -83,14 +102,31 @@
     
     .message-deleted {
         font-style: italic;
-        color: #6c757d;
+        color: #94a3b8;
+    }
+    
+    .message-image {
+        max-width: 300px;
+        max-height: 300px;
+        border-radius: 12px;
+        cursor: pointer;
+        margin-top: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transition: transform 0.2s;
+    }
+    
+    .message-image:hover {
+        transform: scale(1.02);
     }
     
     .typing-indicator {
-        padding: 10px;
+        padding: 12px 24px;
         font-style: italic;
-        color: #6c757d;
+        color: #64748b;
         min-height: 30px;
+        background: #f8fafc;
+        border-left: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
     }
     
     .typing-indicator .dot {
@@ -98,32 +134,37 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background-color: #6c757d;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         margin: 0 2px;
         animation: typing 1.4s infinite;
     }
     
-    .typing-indicator .dot:nth-child(2) {
-        animation-delay: 0.2s;
-    }
-    
-    .typing-indicator .dot:nth-child(3) {
-        animation-delay: 0.4s;
-    }
+    .typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
     
     @keyframes typing {
-        0%, 60%, 100% {
-            transform: translateY(0);
-        }
-        30% {
-            transform: translateY(-10px);
-        }
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-8px); }
     }
     
     .message-input-container {
-        border-top: 2px solid #dee2e6;
-        padding: 15px 0;
-        background-color: white;
+        border-top: 2px solid #e2e8f0;
+        padding: 16px 24px;
+        background: white;
+        border-radius: 0 0 16px 16px;
+    }
+    
+    .members-card {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        border: none;
+    }
+    
+    .members-card .card-header {
+        background: var(--dark-gradient);
+        padding: 16px 20px;
+        border: none;
     }
     
     .members-list {
@@ -131,206 +172,351 @@
         overflow-y: auto;
     }
     
+    .member-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.2s;
+    }
+    
+    .member-item:hover {
+        background: #f8fafc;
+    }
+    
+    .member-item:last-child {
+        border-bottom: none;
+    }
+    
     .online-badge {
         width: 10px;
         height: 10px;
         border-radius: 50%;
-        background-color: #28a745;
+        background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
         display: inline-block;
-        margin-right: 5px;
+        margin-right: 8px;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
     }
     
-    .muted-indicator {
-        color: #dc3545;
-        font-size: 0.8rem;
+    .offline-indicator {
+        background: #94a3b8 !important;
+        box-shadow: none !important;
     }
-
+    
     .muted-banner {
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        color: #721c24;
-        padding: 15px;
-        margin-bottom: 10px;
-        border-radius: 8px;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: none;
+        color: #92400e;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-
-    .message-image {
-        max-width: 300px;
-        max-height: 300px;
+    
+    .image-preview-container {
+        background: #f8fafc;
+        padding: 12px;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .image-preview {
+        max-width: 80px;
+        max-height: 80px;
         border-radius: 8px;
+        object-fit: cover;
+    }
+    
+    .btn-header {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .btn-header:hover {
+        background: rgba(255,255,255,0.3);
+        color: white;
+    }
+    
+    .btn-leave {
+        background: rgba(239, 68, 68, 0.9);
+        border: 2px solid white;
+        color: white;
+    }
+    
+    .btn-leave:hover {
+        background: #dc2626;
+        border-color: white;
+        color: white;
+    }
+    
+    .chat-card {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+        border: none;
+    }
+    
+    /* Image Lightbox */
+    .lightbox-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.9);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
         cursor: pointer;
     }
+    
+    .lightbox-overlay.active {
+        display: flex;
+    }
+    
+    .lightbox-overlay img {
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: 8px;
+    }
+    
+    /* Modal Styling */
+    .modal-content {
+        border-radius: 16px;
+        border: none;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid #f1f5f9;
+        padding: 20px 24px;
+    }
+    
+    .modal-header.bg-danger {
+        background: var(--danger-gradient) !important;
+    }
+    
+    .modal-header.bg-warning {
+        background: var(--warning-gradient) !important;
+        color: white;
+    }
+    
+    .modal-body {
+        padding: 24px;
+    }
+    
+    .modal-footer {
+        border-top: 1px solid #f1f5f9;
+        padding: 16px 24px;
+    }
+    
+    /* Empty state */
+    .empty-chat {
+        text-align: center;
+        padding: 60px 20px;
+        color: #94a3b8;
+    }
+    
+    .empty-chat i {
+        font-size: 4rem;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
 
-    .image-preview {
-        max-width: 100px;
-        max-height: 100px;
-        border-radius: 4px;
+    /* Custom scrollbar */
+    .chat-messages::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .chat-messages::-webkit-scrollbar-track {
+        background: #f1f5f9;
+    }
+    
+    .chat-messages::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row">
+    <div class="row g-4">
         <!-- Chat Area -->
-        <div class="col-md-9">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <div class="d-flex justify-content-between align-items-center">
+        <div class="col-lg-9">
+            <div class="chat-card">
+                <div class="chat-header text-white">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
-                            <h5 class="mb-0">
+                            <h5>
                                 {% if room.room_type == 'public' %}
-                                    <i class="bi bi-globe"></i>
+                                    <i class="bi bi-globe2 me-2"></i>
                                 {% else %}
-                                    <i class="bi bi-lock"></i>
+                                    <i class="bi bi-lock-fill me-2"></i>
                                 {% endif %}
                                 {{ room.name }}
                             </h5>
-                            <small>{{ room.description|truncatewords:10 }}</small>
+                            <small class="opacity-75">{{ room.description|truncatewords:15 }}</small>
                         </div>
-                        <div>
+                        <div class="d-flex gap-2 flex-wrap">
                             {% if can_moderate %}
-                            <a href="{% url 'moderation:room_moderation' room.id %}" class="btn btn-sm btn-warning me-2">
-                                <i class="bi bi-shield-check"></i> Moderate
+                            <a href="{% url 'moderation:room_moderation' room.id %}" class="btn btn-header">
+                                <i class="bi bi-shield-check me-1"></i> Moderate
                             </a>
                             {% endif %}
                             {% if room.room_type == 'private' and can_moderate %}
-                            <a href="{% url 'chat:invite_user' room.slug %}" class="btn btn-sm btn-success me-2">
-                                <i class="bi bi-person-plus"></i> Invite
+                            <a href="{% url 'chat:invite_user' room.slug %}" class="btn btn-header">
+                                <i class="bi bi-person-plus me-1"></i> Invite
                             </a>
                             {% endif %}
                             {% if can_leave %}
-                            <a href="{% url 'chat:leave_room' room.slug %}" class="btn btn-sm btn-outline-danger me-2">
-                                <i class="bi bi-box-arrow-right"></i> Leave
+                            <a href="{% url 'chat:leave_room' room.slug %}" class="btn btn-leave">
+                                <i class="bi bi-box-arrow-right me-1"></i> Leave
                             </a>
                             {% endif %}
-                            <a href="{% url 'chat:room_list' %}" class="btn btn-sm btn-light">
-                                <i class="bi bi-arrow-left"></i> Back
+                            <a href="{% url 'chat:room_list' %}" class="btn btn-header">
+                                <i class="bi bi-arrow-left me-1"></i> Back
                             </a>
                         </div>
                     </div>
                 </div>
                 
-                <div class="card-body p-0">
-                    <div class="chat-container">
-                        <!-- Messages -->
-                        <div id="chat-messages" class="chat-messages">
-                            {% for message in messages %}
-                            <div class="message-item {% if message.sender == user %}text-end{% endif %}" data-message-id="{{ message.id }}">
-                                <div class="message-bubble {% if message.sender == user %}message-own{% else %}message-other{% endif %} d-inline-block">
-                                    {% if message.is_deleted %}
-                                    <div class="message-deleted">
-                                        <i class="bi bi-trash"></i> This message has been deleted
-                                    </div>
-                                    {% else %}
-                                    {% if message.sender != user %}
-                                    <div class="message-sender text-primary">
-                                        {{ message.sender.username }}
-                                    </div>
-                                    {% endif %}
-                                    <div>{{ message.content }}</div>
-                                    <div class="message-time">
-                                        {{ message.created_at|date:"H:i" }}
-                                    </div>
-                                    <!-- Message Actions -->
-                                    {% if message.sender != user %}
-                                    <div class="message-actions">
-                                        <div class="dropdown">
-                                            <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown">
-                                                <i class="bi bi-three-dots-vertical"></i>
-                                            </button>
-                                            <ul class="dropdown-menu dropdown-menu-end">
-                                                <li>
-                                                    <a class="dropdown-item text-warning" href="{% url 'moderation:report_message' message.id %}">
-                                                        <i class="bi bi-flag"></i> Report
-                                                    </a>
-                                                </li>
-                                                {% if can_moderate %}
-                                                <li><hr class="dropdown-divider"></li>
-                                                <li>
-                                                    <a class="dropdown-item text-danger" href="{% url 'moderation:delete_message' message.id %}">
-                                                        <i class="bi bi-trash"></i> Delete
-                                                    </a>
-                                                </li>
-                                                {% endif %}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                    {% endif %}
+                <div class="chat-container">
+                    <!-- Messages -->
+                    <div id="chat-messages" class="chat-messages">
+                        {% for message in messages %}
+                        <div class="message-item {% if message.sender == user %}text-end{% endif %}" data-message-id="{{ message.id }}">
+                            <div class="message-bubble {% if message.sender == user %}message-own{% else %}message-other{% endif %} d-inline-block">
+                                {% if message.is_deleted %}
+                                <div class="message-deleted">
+                                    <i class="bi bi-trash"></i> This message has been deleted
                                 </div>
-                            </div>
-                            {% empty %}
-                            <div class="text-center text-muted py-5">
-                                <i class="bi bi-chat-text" style="font-size: 3rem;"></i>
-                                <p>No messages yet. Start the conversation!</p>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        
-                        <!-- Typing Indicator -->
-                        <div id="typing-indicator" class="typing-indicator"></div>
-                        
-                        <!-- Message Input -->
-                        <div class="message-input-container">
-                            {% if is_muted %}
-                            <div class="muted-banner" id="mute-banner">
-                                <i class="bi bi-mic-mute-fill"></i> <strong>You are muted in this room.</strong>
-                                {% if mute_info.expires_at %}
-                                <br><small>Mute expires: {{ mute_info.expires_at|date:"M d, Y H:i" }}</small>
                                 {% else %}
-                                <br><small>This mute is permanent until a moderator removes it.</small>
+                                {% if message.sender != user %}
+                                <div class="message-sender">{{ message.sender.username }}</div>
+                                {% endif %}
+                                {% if message.content %}<div>{{ message.content }}</div>{% endif %}
+                                {% if message.image %}
+                                <img src="{{ message.image.url }}" alt="Image" class="message-image" onclick="openLightbox(this.src)">
+                                {% endif %}
+                                <div class="message-time">{{ message.created_at|date:"H:i" }}</div>
+                                {% if message.sender != user %}
+                                <div class="message-actions">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown">
+                                            <i class="bi bi-three-dots-vertical"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li>
+                                                <a class="dropdown-item text-warning" href="{% url 'moderation:report_message' message.id %}">
+                                                    <i class="bi bi-flag me-2"></i> Report
+                                                </a>
+                                            </li>
+                                            {% if can_moderate %}
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <a class="dropdown-item text-danger" href="{% url 'moderation:delete_message' message.id %}">
+                                                    <i class="bi bi-trash me-2"></i> Delete
+                                                </a>
+                                            </li>
+                                            {% endif %}
+                                        </ul>
+                                    </div>
+                                </div>
+                                {% endif %}
                                 {% endif %}
                             </div>
+                        </div>
+                        {% empty %}
+                        <div class="empty-chat">
+                            <i class="bi bi-chat-text"></i>
+                            <h5>No messages yet</h5>
+                            <p>Start the conversation!</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Typing Indicator -->
+                    <div id="typing-indicator" class="typing-indicator"></div>
+                    
+                    <!-- Message Input -->
+                    <div class="message-input-container">
+                        {% if is_muted %}
+                        <div class="muted-banner" id="mute-banner">
+                            <i class="bi bi-mic-mute-fill me-2"></i> <strong>You are muted in this room.</strong>
+                            {% if mute_info.expires_at %}
+                            <br><small>Mute expires: {{ mute_info.expires_at|date:"M d, Y H:i" }}</small>
                             {% else %}
-                            <form id="message-form" enctype="multipart/form-data">
-                                <div id="image-preview-container" class="mb-2" style="display: none;">
-                                    <img id="image-preview" class="image-preview" src="" alt="Preview">
-                                    <button type="button" class="btn btn-sm btn-danger ms-2" onclick="clearImagePreview()">
-                                        <i class="bi bi-x"></i>
-                                    </button>
-                                </div>
-                                <div class="input-group">
-                                    <label class="btn btn-outline-secondary" for="image-input">
-                                        <i class="bi bi-image"></i>
-                                    </label>
-                                    <input type="file" id="image-input" accept="image/*" style="display: none;">
-                                    <input 
-                                        type="text" 
-                                        id="message-input" 
-                                        class="form-control" 
-                                        placeholder="Type your message..."
-                                        autocomplete="off"
-                                    >
-                                    <button id="send-button" class="btn btn-primary" type="submit">
-                                        <i class="bi bi-send"></i> Send
-                                    </button>
-                                </div>
-                            </form>
+                            <br><small>This mute is permanent until a moderator removes it.</small>
                             {% endif %}
                         </div>
+                        {% else %}
+                        <form id="message-form" enctype="multipart/form-data">
+                            <div id="image-preview-container" class="image-preview-container" style="display: none;">
+                                <img id="image-preview" class="image-preview" src="" alt="Preview">
+                                <div class="flex-grow-1">
+                                    <small class="text-muted">Image attached</small>
+                                    <p class="mb-0 small" id="image-name"></p>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearImagePreview()">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                            <div class="input-group">
+                                <label class="btn btn-outline-secondary" for="image-input" title="Attach Image">
+                                    <i class="bi bi-image"></i>
+                                </label>
+                                <input type="file" id="image-input" accept="image/*" style="display: none;">
+                                <input 
+                                    type="text" 
+                                    id="message-input" 
+                                    class="form-control" 
+                                    placeholder="Type your message..."
+                                    autocomplete="off"
+                                >
+                                <button id="send-button" class="btn btn-primary" type="submit">
+                                    <i class="bi bi-send-fill me-1"></i> Send
+                                </button>
+                            </div>
+                        </form>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
         
         <!-- Members Sidebar -->
-        <div class="col-md-3">
-            <div class="card shadow-sm">
-                <div class="card-header bg-secondary text-white">
+        <div class="col-lg-3">
+            <div class="members-card card">
+                <div class="card-header text-white">
                     <h6 class="mb-0">
-                        <i class="bi bi-people"></i> Members (<span id="online-count">{{ members.count }}</span>)
+                        <i class="bi bi-people-fill me-2"></i> Members 
+                        <span class="badge bg-light text-dark ms-2" id="member-count">{{ members.count }}</span>
                     </h6>
                 </div>
                 <div class="card-body p-0">
-                    <div class="members-list">
+                    <div class="members-list" id="members-list">
                         {% for member in members %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center" id="member-{{ member.id }}">
-                            <div>
+                        <div class="member-item" id="member-{{ member.id }}">
+                            <div class="d-flex align-items-center">
                                 <span class="online-badge {% if member.profile.online_status != 'online' %}offline-indicator{% endif %}" id="status-{{ member.id }}"></span>
                                 <span id="username-{{ member.id }}">{{ member.username }}</span>
                                 {% if member == room.created_by %}
-                                <span class="badge bg-warning text-dark">Admin</span>
+                                <span class="badge bg-warning text-dark ms-2" style="font-size: 0.65rem;">Owner</span>
                                 {% endif %}
                             </div>
                             {% if member != user %}
@@ -341,30 +527,30 @@
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li>
                                         <a class="dropdown-item" href="{% url 'chat:report_user' room.slug member.id %}">
-                                            <i class="bi bi-flag"></i> Report User
+                                            <i class="bi bi-flag me-2"></i> Report
                                         </a>
                                     </li>
                                     {% if can_moderate and member != user and member != room.created_by %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item" href="{% url 'moderation:warn_user_room' member.id room.id %}">
-                                            <i class="bi bi-exclamation-triangle"></i> Warn
+                                            <i class="bi bi-exclamation-triangle me-2"></i> Warn
                                         </a>
                                     </li>
                                     <li>
                                         <a class="dropdown-item" href="{% url 'moderation:mute_user' member.id room.id %}">
-                                            <i class="bi bi-mic-mute"></i> Mute
+                                            <i class="bi bi-mic-mute me-2"></i> Mute
                                         </a>
                                     </li>
                                     <li>
                                         <a class="dropdown-item" href="{% url 'moderation:kick_user' member.id room.id %}">
-                                            <i class="bi bi-door-open"></i> Kick
+                                            <i class="bi bi-door-open me-2"></i> Kick
                                         </a>
                                     </li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item text-danger" href="{% url 'moderation:ban_user_room' member.id room.id %}">
-                                            <i class="bi bi-slash-circle"></i> Ban
+                                            <i class="bi bi-slash-circle me-2"></i> Ban
                                         </a>
                                     </li>
                                     {% endif %}
@@ -379,6 +565,33 @@
         </div>
     </div>
 </div>
+
+<!-- Image Lightbox -->
+<div class="lightbox-overlay" id="lightbox" onclick="closeLightbox()">
+    <img src="" alt="Full size image" id="lightbox-image">
+</div>
+
+<!-- Action Alert Modal -->
+<div class="modal fade" id="actionModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white" id="actionModalHeader">
+                <h5 class="modal-title" id="actionModalTitle">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Notice
+                </h5>
+            </div>
+            <div class="modal-body text-center py-4">
+                <i class="bi bi-exclamation-circle text-danger" style="font-size: 4rem;"></i>
+                <p class="mt-3 mb-0 fs-5" id="actionModalMessage">You have been removed from this room.</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-primary px-4" id="actionModalBtn" onclick="redirectToRoomList()">
+                    <i class="bi bi-arrow-left me-2"></i> Go to Room List
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -387,27 +600,40 @@
     const username = '{{ user.username }}';
     const userId = {{ user.id }};
     const isMuted = {{ is_muted|yesno:"true,false" }};
+    const csrfToken = '{{ csrf_token }}';
     
     // Chat WebSocket connection
     const chatSocket = new WebSocket(
         'ws://' + window.location.host + '/ws/chat/' + roomSlug + '/'
     );
     
-    // Presence WebSocket connection
-    const presenceSocket = new WebSocket(
-        'ws://' + window.location.host + '/ws/presence/'
-    );
-    
     const messagesContainer = document.getElementById('chat-messages');
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
+    const messageForm = document.getElementById('message-form');
     const typingIndicator = document.getElementById('typing-indicator');
     
     // Image handling
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
     const imagePreviewContainer = document.getElementById('image-preview-container');
+    const imageName = document.getElementById('image-name');
     let selectedImage = null;
+    
+    // Lightbox functions
+    function openLightbox(src) {
+        document.getElementById('lightbox-image').src = src;
+        document.getElementById('lightbox').classList.add('active');
+    }
+    
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('active');
+    }
+    
+    // Escape key to close lightbox
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeLightbox();
+    });
 
     // Scroll to bottom
     function scrollToBottom() {
@@ -416,26 +642,67 @@
     
     scrollToBottom();
     
+    // Show action modal
+    function showActionModal(title, message, type) {
+        const modal = new bootstrap.Modal(document.getElementById('actionModal'));
+        const header = document.getElementById('actionModalHeader');
+        const titleEl = document.getElementById('actionModalTitle');
+        const messageEl = document.getElementById('actionModalMessage');
+        
+        // Set header color based on type
+        header.className = 'modal-header text-white';
+        if (type === 'kick') {
+            header.classList.add('bg-warning');
+            titleEl.innerHTML = '<i class="bi bi-door-open-fill me-2"></i> ' + title;
+        } else if (type === 'ban') {
+            header.classList.add('bg-danger');
+            titleEl.innerHTML = '<i class="bi bi-slash-circle-fill me-2"></i> ' + title;
+        } else if (type === 'mute') {
+            header.classList.add('bg-secondary');
+            titleEl.innerHTML = '<i class="bi bi-mic-mute-fill me-2"></i> ' + title;
+        } else {
+            header.classList.add('bg-danger');
+            titleEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i> ' + title;
+        }
+        
+        messageEl.textContent = message;
+        modal.show();
+    }
+    
+    function redirectToRoomList() {
+        window.location.href = '{% url "chat:room_list" %}';
+    }
+    
     // Chat WebSocket handlers
     chatSocket.onmessage = function(e) {
         const data = JSON.parse(e.data);
         
         if (data.type === 'message') {
+            // Remove empty state if exists
+            const emptyState = messagesContainer.querySelector('.empty-chat');
+            if (emptyState) emptyState.remove();
+            
             // Add new message
             const isOwn = data.username === username;
+            let imageHTML = '';
+            if (data.image_url) {
+                imageHTML = `<img src="${data.image_url}" alt="Image" class="message-image" onclick="openLightbox(this.src)">`;
+            }
+            
             const messageHTML = `
-                <div class="message-item ${isOwn ? 'text-end' : ''}">
+                <div class="message-item ${isOwn ? 'text-end' : ''}" data-message-id="${data.message_id || ''}">
                     <div class="message-bubble ${isOwn ? 'message-own' : 'message-other'} d-inline-block">
-                        ${!isOwn ? `<div class="message-sender text-primary">${escapeHtml(data.username)}</div>` : ''}
-                        <div>${escapeHtml(data.message)}</div>
+                        ${!isOwn ? `<div class="message-sender">${escapeHtml(data.username)}</div>` : ''}
+                        ${data.message ? `<div>${escapeHtml(data.message)}</div>` : ''}
+                        ${imageHTML}
                         <div class="message-time">Just now</div>
                     </div>
                 </div>
             `;
             messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
             scrollToBottom();
-        } else if (data.type === 'typing') {
-            // Show typing indicator
+        } 
+        else if (data.type === 'typing') {
             if (data.username !== username && data.is_typing) {
                 typingIndicator.innerHTML = `
                     <span>${escapeHtml(data.username)} is typing</span>
@@ -447,26 +714,79 @@
                 typingIndicator.innerHTML = '';
             }
         }
-
-        if (data.type === 'force_disconnect') {
-            alert(data.reason);
-            window.location.href = '{% url "chat:room_list" %}';
-            return;
+        else if (data.type === 'force_disconnect') {
+            // Show modal alert before redirecting
+            const action = data.action || 'removed';
+            const reason = data.reason || 'You have been removed from this room.';
+            
+            let title = 'Removed from Room';
+            if (action === 'kick') title = 'You Have Been Kicked';
+            else if (action === 'ban') title = 'You Have Been Banned';
+            
+            showActionModal(title, reason, action);
         }
-
-        if (data.type === 'mute_status') {
+        else if (data.type === 'mute_status') {
+            // Only process if this is for the current user
+            if (data.user_id && data.user_id !== userId) return;
+            
             if (data.is_muted) {
-                // Show muted banner
-                location.reload();
+                // Show mute banner dynamically
+                const inputContainer = document.querySelector('.message-input-container');
+                if (inputContainer && !document.getElementById('mute-banner')) {
+                    let expiresText = 'This mute is permanent until a moderator removes it.';
+                    if (data.expires_at) {
+                        const expiresDate = new Date(data.expires_at);
+                        expiresText = 'Mute expires: ' + expiresDate.toLocaleString();
+                    }
+                    inputContainer.innerHTML = `
+                        <div class="muted-banner" id="mute-banner">
+                            <i class="bi bi-mic-mute-fill me-2"></i> <strong>You are muted in this room.</strong>
+                            <br><small>${expiresText}</small>
+                        </div>
+                    `;
+                }
+            } else if (!data.is_muted) {
+                // Remove mute banner and restore input
+                location.reload(); // Reload to restore input form
             }
+        }
+        else if (data.type === 'member_joined') {
+            // Add new member to the list
+            addMemberToList(data.user_id, data.username, data.is_owner);
+            updateMemberCount();
+        }
+        else if (data.type === 'member_left') {
+            // Remove member from the list
+            removeMemberFromList(data.user_id);
+            updateMemberCount();
+        }
+        else if (data.type === 'message_deleted') {
+            const msgEl = document.querySelector(`[data-message-id="${data.message_id}"]`);
+            if (msgEl) {
+                const bubble = msgEl.querySelector('.message-bubble');
+                if (bubble) {
+                    bubble.innerHTML = '<div class="message-deleted"><i class="bi bi-trash"></i> This message has been deleted</div>';
+                }
+            }
+        }
+        else if (data.type === 'error') {
+            alert(data.message);
         }
     };
     
     chatSocket.onclose = function(e) {
-        console.error('Chat socket closed unexpectedly');
-        showReconnectMessage();
+        console.error('Chat socket closed');
+        // Only show reconnect if not intentionally closed
+        if (e.code !== 1000) {
+            showReconnectMessage();
+        }
     };
     
+    chatSocket.onerror = function(e) {
+        console.error('Chat socket error:', e);
+    };
+    
+    // Image input handler
     if (imageInput) {
         imageInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -475,7 +795,8 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     imagePreview.src = e.target.result;
-                    imagePreviewContainer.style.display = 'block';
+                    imageName.textContent = file.name;
+                    imagePreviewContainer.style.display = 'flex';
                 };
                 reader.readAsDataURL(file);
             }
@@ -484,18 +805,23 @@
 
     function clearImagePreview() {
         selectedImage = null;
-        imageInput.value = '';
-        imagePreviewContainer.style.display = 'none';
+        if (imageInput) imageInput.value = '';
+        if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
     }
 
-    // Update send message to handle images
+    // Send message - SINGLE UNIFIED FUNCTION
     function sendMessage() {
-        const message = messageInput.value.trim();
+        if (isMuted) {
+            alert('You are muted in this room.');
+            return;
+        }
+        
+        const message = messageInput ? messageInput.value.trim() : '';
         
         if (!message && !selectedImage) return;
         
         if (selectedImage) {
-            // Send via form data for image upload
+            // Send via API for image upload
             const formData = new FormData();
             formData.append('content', message);
             formData.append('image', selectedImage);
@@ -504,23 +830,29 @@
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
+                    'X-CSRFToken': csrfToken
                 }
-            }).then(response => response.json())
+            })
+            .then(response => response.json())
             .then(data => {
                 if (data.error) {
                     alert(data.error);
                 } else {
-                    // Broadcast via WebSocket
+                    // Broadcast via WebSocket so all users see it
                     chatSocket.send(JSON.stringify({
                         'type': 'message',
                         'message': message,
                         'username': username,
-                        'image_url': data.image_url
+                        'image_url': data.image_url,
+                        'message_id': data.id
                     }));
                 }
                 clearImagePreview();
-                messageInput.value = '';
+                if (messageInput) messageInput.value = '';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to send message');
             });
         } else {
             // Text-only message via WebSocket
@@ -529,100 +861,29 @@
                 'message': message,
                 'username': username
             }));
-            messageInput.value = '';
+            if (messageInput) messageInput.value = '';
         }
     }
-
-
-    // Presence WebSocket handlers
-    presenceSocket.onmessage = function(e) {
-        const data = JSON.parse(e.data);
-        
-        if (data.type === 'status') {
-            updateUserStatus(data.user_id, data.status);
-        }
-    };
     
-    presenceSocket.onclose = function(e) {
-        console.error('Presence socket closed unexpectedly');
-    };
-    
-    // Send heartbeat every 30 seconds to keep connection alive
-    setInterval(function() {
-        if (presenceSocket.readyState === WebSocket.OPEN) {
-            presenceSocket.send(JSON.stringify({
-                'type': 'heartbeat'
-            }));
-        }
-    }, 30000);
-    
-    // Update user online status
-    function updateUserStatus(userId, status) {
-        const statusBadge = document.getElementById('status-' + userId);
-        if (statusBadge) {
-            if (status === 'online') {
-                statusBadge.classList.remove('offline-indicator');
-            } else {
-                statusBadge.classList.add('offline-indicator');
-            }
-        }
-        updateOnlineCount();
-    }
-    
-    // Update online members count
-    function updateOnlineCount() {
-        const onlineBadges = document.querySelectorAll('.online-badge:not(.offline-indicator)');
-        document.getElementById('online-count').textContent = onlineBadges.length;
-    }
-    
-    // Show reconnect message
-    function showReconnectMessage() {
-        const alertHTML = `
-            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                Connection lost. Please refresh the page.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-        document.querySelector('.container-fluid').insertAdjacentHTML('afterbegin', alertHTML);
-    }
-    
-    // Escape HTML to prevent XSS
-    function escapeHtml(text) {
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-    }
-    
-    // Send message
-    function sendMessage() {
-        if (isMuted) {
-            alert('You are muted in this room.');
-            return;
-        }
-        
-        const message = messageInput.value.trim();
-        if (message) {
-            chatSocket.send(JSON.stringify({
-                'type': 'message',
-                'message': message,
-                'username': username
-            }));
-            messageInput.value = '';
-        }
+    // Form submit handler
+    if (messageForm) {
+        messageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            sendMessage();
+        });
     }
     
     if (sendButton) {
-        sendButton.addEventListener('click', sendMessage);
+        sendButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            sendMessage();
+        });
     }
     
     if (messageInput) {
         messageInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 sendMessage();
             }
         });
@@ -653,10 +914,74 @@
         });
     }
     
+    // Member list functions
+    function addMemberToList(memberId, memberUsername, isOwner) {
+        const membersList = document.getElementById('members-list');
+        if (!membersList || document.getElementById('member-' + memberId)) return;
+        
+        const ownerBadge = isOwner ? '<span class="badge bg-warning text-dark ms-2" style="font-size: 0.65rem;">Owner</span>' : '';
+        const memberHTML = `
+            <div class="member-item" id="member-${memberId}">
+                <div class="d-flex align-items-center">
+                    <span class="online-badge" id="status-${memberId}"></span>
+                    <span id="username-${memberId}">${escapeHtml(memberUsername)}</span>
+                    ${ownerBadge}
+                </div>
+            </div>
+        `;
+        membersList.insertAdjacentHTML('beforeend', memberHTML);
+    }
+    
+    function removeMemberFromList(memberId) {
+        const memberEl = document.getElementById('member-' + memberId);
+        if (memberEl) memberEl.remove();
+    }
+    
+    function updateMemberCount() {
+        const count = document.querySelectorAll('.member-item').length;
+        const countEl = document.getElementById('member-count');
+        if (countEl) countEl.textContent = count;
+    }
+    
+    // Update user online status
+    function updateUserStatus(memberId, status) {
+        const statusBadge = document.getElementById('status-' + memberId);
+        if (statusBadge) {
+            if (status === 'online') {
+                statusBadge.classList.remove('offline-indicator');
+            } else {
+                statusBadge.classList.add('offline-indicator');
+            }
+        }
+    }
+    
+    // Show reconnect message
+    function showReconnectMessage() {
+        const alertHTML = `
+            <div class="alert alert-warning alert-dismissible fade show m-3" role="alert">
+                <i class="bi bi-wifi-off me-2"></i>
+                Connection lost. <a href="#" onclick="location.reload()">Click here to reconnect</a>.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        document.querySelector('.container-fluid').insertAdjacentHTML('afterbegin', alertHTML);
+    }
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+    
     // Clean up on page unload
     window.addEventListener('beforeunload', function() {
-        chatSocket.close();
-        presenceSocket.close();
+        chatSocket.close(1000); // Normal closure
     });
 </script>
 {% endblock %}
