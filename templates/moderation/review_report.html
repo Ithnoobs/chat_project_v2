@@ -27,6 +27,11 @@
                             <strong>Reported:</strong> {{ report.created_at|date:"F d, Y H:i" }}
                         </div>
                     </div>
+                    {% if report.reported_user %}
+                    <div class="mb-3">
+                        <strong>Reported User:</strong> {{ report.reported_user.username }}
+                    </div>
+                    {% endif %}
                     <div class="mb-3">
                         <strong>Reason:</strong>
                         <p class="mb-0">{{ report.reason }}</p>
@@ -34,7 +39,8 @@
                 </div>
             </div>
             
-            <!-- Reported Message -->
+            <!-- Reported Message (only if message exists) -->
+            {% if report.message %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-dark text-white">
                     <h5 class="mb-0">Reported Message</h5>
@@ -55,7 +61,7 @@
                 </div>
             </div>
             
-            <!-- Quick Actions -->
+            <!-- Quick Actions (only if message exists) -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-danger text-white">
                     <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
@@ -80,6 +86,35 @@
                     </div>
                 </div>
             </div>
+            {% elif report.reported_user and report.room %}
+            <!-- Quick Actions for user reports (no specific message) -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">This is a user report without a specific message.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'moderation:warn_user_room' report.reported_user.id report.room.id %}" class="btn btn-outline-warning">
+                            <i class="bi bi-exclamation-triangle"></i> Warn User
+                        </a>
+                        <a href="{% url 'moderation:mute_user' report.reported_user.id report.room.id %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-mic-mute"></i> Mute User
+                        </a>
+                        <a href="{% url 'moderation:kick_user' report.reported_user.id report.room.id %}" class="btn btn-outline-dark">
+                            <i class="bi bi-door-open"></i> Kick User
+                        </a>
+                        <a href="{% url 'moderation:ban_user_room' report.reported_user.id report.room.id %}" class="btn btn-danger">
+                            <i class="bi bi-slash-circle"></i> Ban User
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-4">
+                <i class="bi bi-info-circle"></i> This report does not have an associated message or room for quick actions.
+            </div>
+            {% endif %}
             
             <!-- Review Form -->
             <div class="card shadow-sm">

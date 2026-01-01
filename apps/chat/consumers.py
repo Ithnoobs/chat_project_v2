@@ -6,6 +6,9 @@ from django.contrib.auth.models import User
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
+    # Track connected users per room (class-level)
+    room_users = {}  # {room_slug: {user_id: channel_name}}
+    
     async def connect(self):
         self.room_slug = self.scope['url_route']['kwargs']['room_slug']
         self.room_group_name = f'chat_{self.room_slug}'
@@ -27,7 +30,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         
-        # Join user-specific group for targeted messages (mute, kick, ban)
+        # Join user-specific group for targeted messages (mute, kick, ban, warn)
         self.user_group_name = f'user_{self.user.id}_{self.room_slug}'
         await self.channel_layer.group_add(
             self.user_group_name,
@@ -36,23 +39,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
         await self.accept()
         
+        # Track user in room
+        if self.room_slug not in ChatConsumer.room_users:
+            ChatConsumer.room_users[self.room_slug] = {}
+        
+        is_new_connection = self.user.id not in ChatConsumer.room_users[self.room_slug]
+        ChatConsumer.room_users[self.room_slug][self.user.id] = self.channel_name
+        
         # Check mute status
         self.is_muted = await self.check_mute_status()
         
-        # Broadcast member joined
+        # Broadcast user online status change (update the dot)
         await self.channel_layer.group_send(
             self.room_group_name,
             {
-                'type': 'member_joined',
+                'type': 'user_status_change',
                 'user_id': self.user.id,
-                'username': self.user.username
+                'username': self.user.username,
+                'status': 'online'
             }
         )
         
-        # Update user online status
+        # Update user online status in database
         await self.set_user_online(True)
     
     async def disconnect(self, close_code):
+        # Remove user from room tracking
+        if self.room_slug in ChatConsumer.room_users:
+            if hasattr(self, 'user') and self.user.id in ChatConsumer.room_users[self.room_slug]:
+                del ChatConsumer.room_users[self.room_slug][self.user.id]
+        
         # Leave room group
         await self.channel_layer.group_discard(
             self.room_group_name,
@@ -66,18 +82,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         
-        # Broadcast member left
+        # Broadcast user offline status (update the dot)
         if hasattr(self, 'user') and self.user.is_authenticated:
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    'type': 'member_left',
+                    'type': 'user_status_change',
                     'user_id': self.user.id,
-                    'username': self.user.username
+                    'username': self.user.username,
+                    'status': 'offline'
                 }
             )
             
-            # Update user online status
+            # Update user online status in database
             await self.set_user_online(False)
     
     async def receive(self, text_data):
@@ -177,6 +194,32 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message_id': event.get('message_id')
         }))
     
+    async def user_status_change(self, event):
+        """Handle user online/offline status change - update dots only"""
+        await self.send(text_data=json.dumps({
+            'type': 'user_status',
+            'user_id': event.get('user_id'),
+            'username': event.get('username'),
+            'status': event.get('status')
+        }))
+    
+    async def member_added(self, event):
+        """Handle new member being added to room (via invitation)"""
+        await self.send(text_data=json.dumps({
+            'type': 'member_added',
+            'user_id': event.get('user_id'),
+            'username': event.get('username'),
+            'is_owner': event.get('is_owner', False)
+        }))
+    
+    async def member_removed(self, event):
+        """Handle member being removed from room (kick/ban/leave)"""
+        await self.send(text_data=json.dumps({
+            'type': 'member_removed',
+            'user_id': event.get('user_id'),
+            'username': event.get('username')
+        }))
+    
     async def mute_status(self, event):
         """
         Handle mute status update.
@@ -227,28 +270,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Then close the connection
         await self.close()
     
-    async def member_joined(self, event):
-        """Handle member joining the room"""
-        # Don't notify the user who joined
-        if event.get('user_id') == self.user.id:
+    async def warning_received(self, event):
+        """
+        Handle warning notification.
+        Only process if this message is for the current user.
+        Shows warning dialog to the user.
+        """
+        target_user_id = event.get('user_id')
+        
+        # Only process if this message is for the current user
+        if target_user_id and target_user_id != self.user.id:
             return
         
+        # Send warning to client
         await self.send(text_data=json.dumps({
-            'type': 'member_joined',
-            'user_id': event.get('user_id'),
-            'username': event.get('username')
-        }))
-    
-    async def member_left(self, event):
-        """Handle member leaving the room"""
-        # Don't notify the user who left
-        if event.get('user_id') == self.user.id:
-            return
-        
-        await self.send(text_data=json.dumps({
-            'type': 'member_left',
-            'user_id': event.get('user_id'),
-            'username': event.get('username')
+            'type': 'warning',
+            'reason': event.get('reason', 'You have received a warning.'),
+            'issued_by': event.get('issued_by', 'Moderator'),
+            'room_name': event.get('room_name', '')
         }))
     
     async def send_error(self, message):

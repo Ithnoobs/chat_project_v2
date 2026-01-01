@@ -275,7 +275,16 @@ def ban_user(request, user_id, room_id=None):
                     'reason': f'You have been banned from {room.name}. Reason: {reason}'
                 }
             )
-        
+            # Also broadcast member removed to update member list for everyone
+            async_to_sync(channel_layer.group_send)(
+                f'chat_{room.slug}',
+                {
+                    'type': 'member_removed',
+                    'user_id': target_user.id,
+                    'username': target_user.username
+                }
+            )
+
         scope = "globally" if is_global and not room else f"from {room.name}" if room else "globally"
         messages.success(request, f"{target_user.username} has been banned {scope}.")
         
@@ -551,7 +560,16 @@ def kick_user(request, user_id, room_id):
                 'reason': f'You have been kicked from {room.name}. Reason: {reason}'
             }
         )
-        
+        # Also broadcast member removed to update member list for everyone
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{room.slug}',
+            {
+                'type': 'member_removed',
+                'user_id': target_user.id,
+                'username': target_user.username
+            }
+        )
+
         messages.success(request, f"{target_user.username} has been kicked from {room.name}.")
         return redirect('moderation:room_moderation', room_id=room.id)
     
@@ -603,6 +621,20 @@ def warn_user(request, user_id, room_id=None):
             related_room=room,
             related_user=request.user
         )
+        
+        # Broadcast warning via WebSocket to show dialog to warned user
+        if room:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'chat_{room.slug}',
+                {
+                    'type': 'warning_received',
+                    'user_id': target_user.id,
+                    'reason': reason,
+                    'issued_by': request.user.username,
+                    'room_name': room.name
+                }
+            )
         
         messages.success(request, f"Warning issued to {target_user.username}.")
         

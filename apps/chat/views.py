@@ -194,12 +194,24 @@ def join_room(request, slug):
         room=room,
         defaults={'role': 'member'}
     )
-    
+
     if created:
         messages.success(request, f'You have joined "{room.name}"!')
+
+        # Broadcast member joined via WebSocket
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{room.slug}',
+            {
+                'type': 'member_added',
+                'user_id': request.user.id,
+                'username': request.user.username,
+                'is_owner': False
+            }
+        )
     else:
         messages.info(request, f'You are already a member of "{room.name}".')
-    
+
     return redirect('chat:room_detail', slug=room.slug)
 
 
@@ -217,8 +229,19 @@ def leave_room(request, slug):
         if membership:
             membership.delete()
             messages.success(request, f'You have left "{room.name}".')
+
+            # Broadcast member left via WebSocket
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'chat_{room.slug}',
+                {
+                    'type': 'member_removed',
+                    'user_id': request.user.id,
+                    'username': request.user.username
+                }
+            )
         return redirect('chat:room_list')
-    
+
     return render(request, 'chat/leave_room.html', {'room': room})
 
 
@@ -283,14 +306,26 @@ def invite_user(request, slug):
                         message=f'{request.user.username} invited you to join "{room.name}"',
                         related_room=room
                     )
+
+                    # Broadcast member added via WebSocket
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f'chat_{room.slug}',
+                        {
+                            'type': 'member_added',
+                            'user_id': user.id,
+                            'username': user.username,
+                            'is_owner': False
+                        }
+                    )
             except User.DoesNotExist:
                 continue
-        
+
         if invited_count > 0:
             messages.success(request, f'{invited_count} user(s) have been invited to the room.')
         else:
             messages.info(request, 'No new users were invited.')
-        
+
         return redirect('chat:room_detail', slug=room.slug)
     
     return render(request, 'chat/invite_user.html', {

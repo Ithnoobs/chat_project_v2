@@ -13,32 +13,41 @@
                 <div class="card-body">
                     <div class="alert alert-warning">
                         <strong>Warning!</strong> You are about to ban <strong>{{ target_user.username }}</strong>
-                        {% if room %}from <strong>{{ room.name }}</strong>{% endif %}.
+                        {% if room %}from <strong>{{ room.name }}</strong>{% else %}globally{% endif %}.
                     </div>
                     
                     <form method="post">
                         {% csrf_token %}
                         
                         <div class="mb-3">
-                            <label class="form-label">Reason for ban</label>
-                            {{ form.reason }}
-                            {% if form.reason.errors %}
-                            <div class="text-danger small">{{ form.reason.errors }}</div>
-                            {% endif %}
+                            <label for="reason" class="form-label">Reason for ban</label>
+                            <textarea 
+                                class="form-control" 
+                                id="reason" 
+                                name="reason" 
+                                rows="3" 
+                                required
+                                placeholder="Explain why this user is being banned..."></textarea>
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label">Duration (minutes)</label>
-                            {{ form.duration }}
+                            <label for="duration" class="form-label">Duration (minutes)</label>
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="duration" 
+                                name="duration" 
+                                min="1"
+                                placeholder="Leave empty for permanent ban">
                             <small class="form-text text-muted">
-                                Leave empty for a permanent ban. Example: 60 = 1 hour, 1440 = 1 day
+                                Examples: 60 = 1 hour, 1440 = 1 day, 10080 = 1 week. Leave empty for permanent.
                             </small>
                         </div>
                         
                         {% if request.user.is_staff and not room %}
                         <div class="mb-3 form-check">
-                            {{ form.is_global }}
-                            <label class="form-check-label" for="id_is_global">
+                            <input type="checkbox" class="form-check-input" id="is_global" name="is_global">
+                            <label class="form-check-label" for="is_global">
                                 Global ban (prevents login across all of Chat App)
                             </label>
                         </div>
@@ -48,7 +57,11 @@
                             <button type="submit" class="btn btn-danger">
                                 <i class="bi bi-slash-circle"></i> Ban User
                             </button>
+                            {% if room %}
+                            <a href="{% url 'moderation:room_moderation' room.id %}" class="btn btn-secondary">Cancel</a>
+                            {% else %}
                             <a href="{% url 'moderation:dashboard' %}" class="btn btn-secondary">Cancel</a>
+                            {% endif %}
                         </div>
                     </form>
                 </div>

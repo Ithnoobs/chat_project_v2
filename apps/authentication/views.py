@@ -23,7 +23,7 @@ def register_view(request):
             user = form.save()
             username = form.cleaned_data.get('username')
             messages.success(request, f'Account created for {username}! You can now login.')
-            return redirect('login')
+            return redirect('authentication:login')
     else:
         form = UserRegistrationForm()
     
@@ -72,7 +72,7 @@ def logout_view(request):
     if request.method == 'POST':
         logout(request)
         messages.info(request, 'You have been logged out.')
-        return redirect('login')
+        return redirect('authentication:login')
     return redirect('chat:room_list')
 
 
@@ -99,7 +99,7 @@ def edit_profile_view(request):
         if form.is_valid():
             form.save()
             messages.success(request, 'Profile updated successfully!')
-            return redirect('profile')
+            return redirect('authentication:profile')
     else:
         form = UserProfileForm(instance=profile)
     
@@ -114,7 +114,7 @@ def edit_account_view(request):
         if form.is_valid():
             form.save()
             messages.success(request, 'Account details updated successfully!')
-            return redirect('profile')
+            return redirect('authentication:profile')
     else:
         form = UserAccountForm(instance=request.user)
     
@@ -131,7 +131,7 @@ def change_password_view(request):
             # Keep the user logged in after password change
             update_session_auth_hash(request, user)
             messages.success(request, 'Password changed successfully!')
-            return redirect('profile')
+            return redirect('authentication:profile')
     else:
         form = CustomPasswordChangeForm(request.user)
     
@@ -151,7 +151,7 @@ def delete_account_view(request):
                 # Delete the user (this will cascade to profile and other related data)
                 request.user.delete()
                 messages.success(request, f'Account "{username}" has been permanently deleted.')
-                return redirect('login')
+                return redirect('authentication:login')
             else:
                 messages.error(request, 'Incorrect password. Please try again.')
     else:

@@ -20,13 +20,16 @@
                         {% csrf_token %}
                         
                         <div class="mb-3">
-                            <label class="form-label">Reason for warning</label>
-                            {{ form.reason }}
-                            {% if form.reason.errors %}
-                            <div class="text-danger small">{{ form.reason.errors }}</div>
-                            {% endif %}
+                            <label for="reason" class="form-label">Reason for warning</label>
+                            <textarea 
+                                class="form-control" 
+                                id="reason" 
+                                name="reason" 
+                                rows="3" 
+                                required
+                                placeholder="Explain why this user is being warned..."></textarea>
                             <small class="form-text text-muted">
-                                This warning will be logged and visible to moderators.
+                                This warning will be logged and the user will be notified.
                             </small>
                         </div>
                         

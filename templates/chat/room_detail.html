@@ -350,6 +350,40 @@
     .chat-messages::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
     }
+
+    /* Fix dropdown z-index in member sidebar */
+    .members-list {
+        overflow-y: auto;
+        overflow-x: visible;
+    }
+
+    .members-card {
+        overflow: visible;
+    }
+
+    .members-card .card-body {
+        overflow: visible;
+    }
+
+    .member-item .dropdown-menu {
+        z-index: 9999 !important;
+    }
+
+    /* Ensure dropdown stays in viewport */
+    .member-item .dropdown-menu.dropdown-menu-end {
+        right: 0;
+        left: auto;
+    }
+
+    @media (max-width: 992px) {
+        .member-item .dropdown-menu {
+            position: fixed !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            right: auto !important;
+            max-width: 90vw;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -673,6 +707,47 @@
         window.location.href = '{% url "chat:room_list" %}';
     }
     
+    // Show warning modal to user
+    function showWarningModal(reason, issuedBy, roomName) {
+        // Create warning modal if it doesn't exist
+        if (!document.getElementById('warningModal')) {
+            const modalHTML = `
+                <div class="modal fade" id="warningModal" tabindex="-1" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header bg-warning text-dark">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    Warning Received
+                                </h5>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-warning mb-3">
+                                    <strong>You have received a warning from a moderator.</strong>
+                                </div>
+                                <p><strong>Reason:</strong></p>
+                                <p id="warningReason" class="bg-light p-3 rounded"></p>
+                                <p class="text-muted small" id="warningMeta"></p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-warning" data-bs-dismiss="modal">
+                                    I Understand
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+        
+        document.getElementById('warningReason').textContent = reason;
+        document.getElementById('warningMeta').textContent = `Issued by ${issuedBy}${roomName ? ' in ' + roomName : ''}`;
+        
+        const modal = new bootstrap.Modal(document.getElementById('warningModal'));
+        modal.show();
+    }
+    
     // Chat WebSocket handlers
     chatSocket.onmessage = function(e) {
         const data = JSON.parse(e.data);
@@ -759,6 +834,24 @@
             // Remove member from the list
             removeMemberFromList(data.user_id);
             updateMemberCount();
+        }
+        else if (data.type === 'user_status') {
+            // Update online/offline dot for user - DO NOT add/remove from member list
+            updateUserStatus(data.user_id, data.status);
+        }
+        else if (data.type === 'member_added') {
+            // Add new member to the list (from invitation acceptance)
+            addMemberToList(data.user_id, data.username, data.is_owner || false);
+            updateMemberCount();
+        }
+        else if (data.type === 'member_removed') {
+            // Remove member from list (kick/ban/leave)
+            removeMemberFromList(data.user_id);
+            updateMemberCount();
+        }
+        else if (data.type === 'warning') {
+            // Show warning dialog to the warned user
+            showWarningModal(data.reason, data.issued_by, data.room_name);
         }
         else if (data.type === 'message_deleted') {
             const msgEl = document.querySelector(`[data-message-id="${data.message_id}"]`);
@@ -982,6 +1075,30 @@
     // Clean up on page unload
     window.addEventListener('beforeunload', function() {
         chatSocket.close(1000); // Normal closure
+    });
+
+    // Fix dropdown positioning to stay in viewport
+    document.querySelectorAll('.member-item .dropdown').forEach(function(dropdown) {
+        dropdown.addEventListener('shown.bs.dropdown', function(e) {
+            const menu = this.querySelector('.dropdown-menu');
+            if (!menu) return;
+
+            const rect = menu.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+            const viewportWidth = window.innerWidth;
+
+            // Check if dropdown is cut off at the bottom
+            if (rect.bottom > viewportHeight) {
+                menu.style.top = 'auto';
+                menu.style.bottom = '100%';
+            }
+
+            // Check if dropdown is cut off on the right
+            if (rect.right > viewportWidth) {
+                menu.style.right = '0';
+                menu.style.left = 'auto';
+            }
+        });
     });
 </script>
 {% endblock %}

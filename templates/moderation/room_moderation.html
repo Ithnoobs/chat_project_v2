@@ -448,7 +448,7 @@
 </div>
 
 <!-- Action Modal -->
-<div class="modal fade" id="actionModal" tabindex="-1">
+<div class="modal" id="actionModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -456,21 +456,21 @@
                     <i class="bi bi-shield-exclamation me-2"></i>
                     <span id="actionModalTitleText">Action</span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" onclick="closeActionModal()"></button>
             </div>
             <form id="actionForm" method="post">
                 {% csrf_token %}
                 <div class="modal-body">
-                    <div class="alert alert-secondary mb-3" id="actionModalAlert">
+                    <div class="alert alert-info mb-3" id="actionModalAlert">
                         You are about to take action against <strong id="targetUsername"></strong>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="actionReason" class="form-label">Reason</label>
-                        <textarea class="form-control" id="actionReason" name="reason" rows="3" required 
+                        <textarea class="form-control" id="actionReason" name="reason" rows="3" required
                                   placeholder="Provide a reason for this action..."></textarea>
                     </div>
-                    
+
                     <div class="mb-3" id="durationField" style="display: none;">
                         <label for="actionDuration" class="form-label">Duration (minutes)</label>
                         <input type="number" class="form-control" id="actionDuration" name="duration" min="1"
@@ -479,25 +479,31 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="closeActionModal()">Cancel</button>
                     <button type="submit" class="btn" id="actionSubmitBtn">Confirm</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<div class="modal-backdrop" id="actionModalBackdrop" style="display: none;"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 const roomId = {{ room.id }};
-let actionModal;
 
-document.addEventListener('DOMContentLoaded', function() {
-    actionModal = new bootstrap.Modal(document.getElementById('actionModal'));
-});
+// URL templates - we'll replace USER_ID placeholder with actual user ID
+const actionUrls = {
+    warn: "{% url 'moderation:warn_user_room' 99999 room.id %}".replace('99999', 'USER_ID'),
+    mute: "{% url 'moderation:mute_user' 99999 room.id %}".replace('99999', 'USER_ID'),
+    kick: "{% url 'moderation:kick_user' 99999 room.id %}".replace('99999', 'USER_ID'),
+    ban: "{% url 'moderation:ban_user_room' 99999 room.id %}".replace('99999', 'USER_ID')
+};
 
 function openActionModal(action, userId, username) {
+    const modal = document.getElementById('actionModal');
+    const backdrop = document.getElementById('actionModalBackdrop');
     const form = document.getElementById('actionForm');
     const title = document.getElementById('actionModalTitleText');
     const alertEl = document.getElementById('actionModalAlert');
@@ -505,11 +511,15 @@ function openActionModal(action, userId, username) {
     const durationField = document.getElementById('durationField');
     const submitBtn = document.getElementById('actionSubmitBtn');
     const reasonField = document.getElementById('actionReason');
-    
+
     targetUsername.textContent = username;
     reasonField.value = '';
     document.getElementById('actionDuration').value = '';
-    
+
+    // Get the URL template and replace USER_ID with actual user ID
+    const urlTemplate = actionUrls[action];
+    const actionUrl = urlTemplate.replace('USER_ID', userId);
+
     // Configure based on action type
     switch(action) {
         case 'warn':
@@ -518,7 +528,6 @@ function openActionModal(action, userId, username) {
             submitBtn.className = 'btn btn-info';
             submitBtn.textContent = 'Issue Warning';
             durationField.style.display = 'none';
-            form.action = `/moderation/warn/${userId}/room/${roomId}/`;
             break;
         case 'mute':
             title.textContent = 'Mute User';
@@ -526,7 +535,6 @@ function openActionModal(action, userId, username) {
             submitBtn.className = 'btn btn-warning';
             submitBtn.textContent = 'Mute User';
             durationField.style.display = 'block';
-            form.action = `/moderation/mute/${userId}/room/${roomId}/`;
             break;
         case 'kick':
             title.textContent = 'Kick User';
@@ -534,7 +542,6 @@ function openActionModal(action, userId, username) {
             submitBtn.className = 'btn btn-secondary';
             submitBtn.textContent = 'Kick User';
             durationField.style.display = 'none';
-            form.action = `/moderation/kick/${userId}/room/${roomId}/`;
             break;
         case 'ban':
             title.textContent = 'Ban User';
@@ -542,11 +549,41 @@ function openActionModal(action, userId, username) {
             submitBtn.className = 'btn btn-danger';
             submitBtn.textContent = 'Ban User';
             durationField.style.display = 'block';
-            form.action = `/moderation/ban/${userId}/room/${roomId}/`;
             break;
     }
-    
-    actionModal.show();
+
+    form.action = actionUrl;
+
+    // Show modal manually without Bootstrap's JS
+    modal.style.display = 'block';
+    modal.classList.add('show');
+    backdrop.style.display = 'block';
+    backdrop.classList.add('show');
+    document.body.classList.add('modal-open');
 }
+
+function closeActionModal() {
+    const modal = document.getElementById('actionModal');
+    const backdrop = document.getElementById('actionModalBackdrop');
+
+    modal.style.display = 'none';
+    modal.classList.remove('show');
+    backdrop.style.display = 'none';
+    backdrop.classList.remove('show');
+    document.body.classList.remove('modal-open');
+}
+
+// Close modal when clicking on backdrop
+document.getElementById('actionModalBackdrop').addEventListener('click', closeActionModal);
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('actionModal');
+        if (modal.classList.contains('show')) {
+            closeActionModal();
+        }
+    }
+});
 </script>
 {% endblock %}

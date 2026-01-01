@@ -19,18 +19,27 @@
                         {% csrf_token %}
                         
                         <div class="mb-3">
-                            <label class="form-label">Reason for muting</label>
-                            {{ form.reason }}
-                            {% if form.reason.errors %}
-                            <div class="text-danger small">{{ form.reason.errors }}</div>
-                            {% endif %}
+                            <label for="reason" class="form-label">Reason for muting</label>
+                            <textarea 
+                                class="form-control" 
+                                id="reason" 
+                                name="reason" 
+                                rows="3" 
+                                required
+                                placeholder="Explain why this user is being muted..."></textarea>
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label">Duration (minutes)</label>
-                            {{ form.duration }}
+                            <label for="duration" class="form-label">Duration (minutes)</label>
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="duration" 
+                                name="duration" 
+                                min="1"
+                                placeholder="Leave empty for permanent mute">
                             <small class="form-text text-muted">
-                                Leave empty for a permanent mute. Example: 30 = 30 minutes, 60 = 1 hour
+                                Examples: 30 = 30 minutes, 60 = 1 hour, 1440 = 1 day. Leave empty for permanent.
                             </small>
                         </div>
                         

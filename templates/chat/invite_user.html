@@ -313,14 +313,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Click on user item
+    // Click on user item - prevent double-toggle (label already toggles checkbox)
     userItems.forEach(item => {
+        // Stop the label from auto-toggling (we'll handle it manually)
+        const checkbox = item.querySelector('.user-checkbox');
+        
         item.addEventListener('click', function(e) {
-            if (e.target.tagName !== 'INPUT') {
-                const checkbox = this.querySelector('.user-checkbox');
-                checkbox.checked = !checkbox.checked;
-                updateSelectionState();
-            }
+            // Prevent default label behavior
+            e.preventDefault();
+            // Toggle checkbox manually
+            checkbox.checked = !checkbox.checked;
+            updateSelectionState();
         });
     });
     
